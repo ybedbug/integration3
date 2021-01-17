@@ -369,6 +369,8 @@ void ucp_worker_discard_uct_ep_flush_comp(uct_completion_t *self);
 
 unsigned ucp_worker_discard_uct_ep_progress(void *arg);
 
+
+/* must be called with async lock held */
 static UCS_F_ALWAYS_INLINE void
 ucp_worker_flush_ops_count_inc(ucp_worker_h worker)
 {
