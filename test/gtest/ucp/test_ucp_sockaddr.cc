@@ -2371,6 +2371,22 @@ protected:
                                                "rcache,odp,direct"));
     }
 
+
+    ucp_tag_message_h message_wait(entity &e, ucp_tag_t tag, ucp_tag_t tag_mask,
+                                   ucp_tag_recv_info_t *info, bool remove = true,
+                                   int worker_index = 0)
+    {
+        ucs_time_t deadline = ucs::get_deadline();
+        ucp_tag_message_h message;
+        do {
+            progress(worker_index);
+            message = ucp_tag_probe_nb(e.worker(worker_index), tag, tag_mask,
+                                       remove, info);
+        } while ((message == NULL) && (ucs_get_time() < deadline));
+
+        return message;
+    }
+
     ucs::ptr_vector<ucs::scoped_setenv> m_env;
 };
 

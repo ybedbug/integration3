@@ -43,6 +43,7 @@ ucp_do_am_bcopy_single(uct_pending_req_t *self, uint8_t am_id,
     ucp_request_t *req   = ucs_container_of(self, ucp_request_t, send.uct);
     ucp_ep_t *ep         = req->send.ep;
     ucp_dt_state_t state = req->send.state.dt;
+    size_t UCS_V_UNUSED max_bcopy;
     ssize_t packed_len;
 
     req->send.lane = ucp_ep_get_am_lane(ep);
@@ -54,9 +55,11 @@ ucp_do_am_bcopy_single(uct_pending_req_t *self, uint8_t am_id,
         return (ucs_status_t)packed_len;
     }
 
-    ucs_assertv((size_t)packed_len <= ucp_ep_get_max_bcopy(ep, req->send.lane),
-                "packed_len=%zd max_bcopy=%zu",
-                packed_len, ucp_ep_get_max_bcopy(ep, req->send.lane));
+    if (ucp_ep_get_rsc_index(ep, req->send.lane) != UCP_NULL_RESOURCE) {
+        max_bcopy = ucp_ep_get_max_bcopy(ep, req->send.lane);
+        ucs_assertv((size_t)packed_len <= max_bcopy,
+                    "packed_len=%zd max_bcopy=%zu", packed_len, max_bcopy);
+    }
 
     return UCS_OK;
 }
@@ -552,7 +555,7 @@ ucp_proto_ssend_ack_request_alloc(ucp_worker_h worker, ucp_ep_h ep)
     req->flags              = 0;
     req->send.ep            = ep;
     req->send.uct.func      = ucp_proto_progress_am_single;
-    req->send.proto.comp_cb = ucp_request_put;
+    req->send.proto.comp_cb = ucp_proto_request_put_completion;
     req->send.proto.status  = UCS_OK;
 
     return req;

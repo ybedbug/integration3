@@ -123,6 +123,10 @@ uct_gdr_copy_estimate_perf(uct_iface_h iface, uct_perf_attr_t *perf_attr)
         perf_attr->overhead = 0;
     }
 
+    if (perf_attr->field_mask & UCT_PERF_ATTR_FIELD_LATENCY) {
+        perf_attr->latency = ucs_linear_func_make(150e-9, 0);
+    }
+
     return UCS_OK;
 }
 

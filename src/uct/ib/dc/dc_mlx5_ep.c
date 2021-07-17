@@ -1132,15 +1132,18 @@ UCS_CLASS_CLEANUP_FUNC(uct_dc_mlx5_ep_t)
     /* TODO: this is good for dcs policy only.
      * Need to change if eps share dci
      */
+    /* cleanup ep arb group always, to cleanup what is done in ctor */
     ucs_arbiter_group_cleanup(uct_dc_mlx5_ep_arb_group(iface, self));
     ucs_assertv_always(uct_dc_mlx5_iface_dci_has_outstanding(iface, self->dci),
                        "iface (%p) ep (%p) dci leak detected: dci=%d", iface,
                        self, self->dci);
 
     /* TODO should be removed by flush */
+    /* remove uct_rc_txqp_purge_outstanding */
     uct_rc_txqp_purge_outstanding(&iface->super.super,
                                   &iface->tx.dcis[self->dci].txqp, UCS_ERR_CANCELED,
                                   iface->tx.dcis[self->dci].txwq.sw_pi, 1);
+    /* replace by warning (same warning would be in RC */
     ucs_assert(ucs_queue_is_empty(&iface->tx.dcis[self->dci].txqp.outstanding));
     iface->tx.dcis[self->dci].ep = NULL;
 }

@@ -114,3 +114,8 @@ void ucp_proto_am_zcopy_completion(uct_completion_t *self)
 
     ucp_proto_am_zcopy_req_complete(req, self->status);
 }
+
+void ucp_proto_request_put_completion(ucp_request_t *req)
+{
+    ucp_request_put(req);
+}

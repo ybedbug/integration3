@@ -107,6 +107,18 @@ ucs_topo_sys_device_bdf_name(ucs_sys_device_t sys_dev, char *buffer, size_t max)
 
 
 /**
+ * Return system device name in BDF format: "<domain>:<bus>:<device>.<function>"
+ *
+ * @param [in]  sys_dev  System device id, as returned from
+ *                       @ref ucs_topo_find_device_by_bus_id
+ * @param [out] buffer   String buffer, filled the device name
+ * @param [in]  max      Maximal size of @a buffer
+ */
+const char *
+ucs_topo_sys_device_bdf_name_short(ucs_sys_device_t sys_dev, char *buffer, size_t max);
+
+
+/**
  * Find a system device by its BDF name: "[<domain>:]<bus>:<device>.<function>".
  *
  * @param [in]  name     BDF name to search for.

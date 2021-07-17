@@ -29,6 +29,7 @@ ucs_status_t ucp_proto_multi_init(const ucp_proto_multi_init_params_t *params,
     ucp_proto_multi_lane_priv_t *lpriv;
     ucp_lane_map_t lane_map;
     ucp_md_map_t reg_md_map;
+    uint32_t weight_sum;
     size_t max_frag;
 
     ucs_assert(params->max_lanes >= 1);
@@ -95,11 +96,13 @@ ucs_status_t ucp_proto_multi_init(const ucp_proto_multi_init_params_t *params,
     }
 
     /* Initialize multi-lane private data and relative weights */
-    reg_md_map        = ucp_proto_common_reg_md_map(&params->super, lane_map);
-    mpriv->reg_md_map = reg_md_map;
-    mpriv->lane_map   = lane_map;
-    mpriv->num_lanes  = 0;
-    perf.max_frag     = SIZE_MAX;
+    reg_md_map          = ucp_proto_common_reg_md_map(&params->super, lane_map);
+    mpriv->reg_md_map   = reg_md_map | params->prereg_md_map;
+    mpriv->lane_map     = lane_map;
+    mpriv->num_lanes    = 0;
+    mpriv->max_frag_sum = 0;
+    weight_sum          = 0;
+    perf.max_frag       = SIZE_MAX;
     ucs_for_each_bit(lane, lane_map) {
         ucs_assert(lane < UCP_MAX_LANES);
 
@@ -112,13 +115,19 @@ ucs_status_t ucp_proto_multi_init(const ucp_proto_multi_init_params_t *params,
                                         &lpriv->super);
 
         /* Due to floating-point accuracy, max_frag may be too large */
-        lpriv->max_frag = max_frag;
+        lpriv->max_frag = ucs_min(max_frag, params->super.max_length);
         lpriv->weight   = ucs_proto_multi_calc_weight(lane_perf->bandwidth,
                                                       perf.bandwidth);
         perf.max_frag   = ucs_min(perf.max_frag, lpriv->max_frag);
 
         ucs_assert(lpriv->max_frag > 0);
         ucs_assert(lpriv->weight > 0);
+        ucs_assert(lpriv->weight <= UCP_PROTO_MULTI_WEIGHT_MAX);
+
+        weight_sum          += lpriv->weight;
+        mpriv->max_frag_sum += lpriv->max_frag;
+        lpriv->weight_sum    = weight_sum;
+        lpriv->max_frag_sum  = mpriv->max_frag_sum;
     }
 
     /* Fill the size of private data according to number of used lanes */
@@ -137,11 +146,13 @@ void ucp_proto_multi_config_str(size_t min_length, size_t max_length,
     char frag_size_buf[64];
     ucp_lane_index_t i;
 
+    ucs_assert(mpriv->num_lanes <= UCP_MAX_LANES);
+
     remaining = 100;
     for (i = 0; i < mpriv->num_lanes; ++i) {
         lpriv      = &mpriv->lanes[i];
         percent    = ucs_min(remaining,
-                             ucp_proto_multi_scaled_length(lpriv, 100));
+                             ucp_proto_multi_scaled_length(lpriv->weight, 100));
         remaining -= percent;
 
         if (percent != 100) {
@@ -152,7 +163,7 @@ void ucp_proto_multi_config_str(size_t min_length, size_t max_length,
 
         /* Print fragment size if it's small enough. For large fragments we can
            skip the print because it has little effect on performance */
-        if (lpriv->max_frag < UCS_MBYTE) {
+        if (lpriv->max_frag < 128 * UCS_KBYTE) {
             ucs_memunits_to_str(lpriv->max_frag, frag_size_buf,
                                 sizeof(frag_size_buf));
             ucs_string_buffer_appendf(strb, "<=%s", frag_size_buf);

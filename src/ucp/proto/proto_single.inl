@@ -44,17 +44,16 @@ ucp_proto_am_bcopy_single_send(ucp_request_t *req, ucp_am_id_t am_id,
     }
 }
 
-static UCS_F_ALWAYS_INLINE ucs_status_t
-ucp_proto_single_status_handle(ucp_request_t *req,
-                               ucp_proto_complete_cb_t complete_func,
-                               ucp_lane_index_t lane, ucs_status_t status)
+static UCS_F_ALWAYS_INLINE ucs_status_t ucp_proto_single_status_handle(
+        ucp_request_t *req, int is_zcopy, ucp_proto_complete_cb_t complete_func,
+        ucp_lane_index_t lane, ucs_status_t status)
 {
     if (ucs_likely(status == UCS_OK)) {
         if (complete_func != NULL) {
             return complete_func(req);
         }
         return UCS_OK;
-    } else if (status == UCS_INPROGRESS) {
+    } else if (is_zcopy && (status == UCS_INPROGRESS)) {
         return UCS_OK;
     } else {
         return ucp_proto_common_handle_send_error(req, lane, status);
@@ -72,7 +71,7 @@ ucp_proto_am_bcopy_single_progress(ucp_request_t *req, ucp_am_id_t am_id,
 
     status = ucp_proto_am_bcopy_single_send(req, am_id, lane, pack_func,
                                             pack_arg, max_packed_size);
-    return ucp_proto_single_status_handle(req, complete_func, lane, status);
+    return ucp_proto_single_status_handle(req, 0, complete_func, lane, status);
 }
 
 static UCS_F_ALWAYS_INLINE ucs_status_t
@@ -101,13 +100,13 @@ ucp_proto_zcopy_single_progress(ucp_request_t *req, unsigned uct_mem_flags,
         req->flags |= UCP_REQUEST_FLAG_PROTO_INITIALIZED;
     }
 
-    ucp_datatype_iter_next_iov(&req->send.state.dt_iter, spriv->super.memh_index,
-                               SIZE_MAX, &next_iter, &iov);
+    ucp_datatype_iter_next_iov(&req->send.state.dt_iter, SIZE_MAX,
+                               spriv->super.memh_index, &next_iter, &iov);
     status = send_func(req, spriv, &iov);
     UCS_PROFILE_REQUEST_EVENT_CHECK_STATUS(req, name, iov.length, status);
 
     return ucp_proto_single_status_handle(
-            req, ucp_proto_request_zcopy_complete_success, spriv->super.lane,
+            req, 1, ucp_proto_request_zcopy_complete_success, spriv->super.lane,
             status);
 }
 

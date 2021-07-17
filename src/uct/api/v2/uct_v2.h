@@ -74,7 +74,10 @@ enum uct_perf_attr_field {
     UCT_PERF_ATTR_FIELD_OVERHEAD           = UCS_BIT(3),
 
     /** Enables @ref uct_perf_attr_t::bandwidth */
-    UCT_PERF_ATTR_FIELD_BANDWIDTH          = UCS_BIT(4)
+    UCT_PERF_ATTR_FIELD_BANDWIDTH          = UCS_BIT(4),
+
+    /** Enables @ref uct_perf_attr_t::latency */
+    UCT_PERF_ATTR_FIELD_LATENCY            = UCS_BIT(5),
 };
 
 
@@ -120,6 +123,8 @@ typedef struct {
      * Bandwidth model. This field is set by the UCT layer.
      */
     uct_ppn_bandwidth_t bandwidth;
+
+    ucs_linear_func_t   latency;
 } uct_perf_attr_t;
 
 

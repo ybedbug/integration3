@@ -14,6 +14,7 @@
 
 #include <ucs/debug/log.h>
 #include <ucs/debug/memtrack_int.h>
+#include <ucs/profile/profile.h>
 #include <ucs/sys/math.h>
 #include <ucs/sys/string.h>
 #include <ucs/sys/sys.h>
@@ -29,12 +30,13 @@ static ucp_mem_t ucp_mem_dummy_handle = {
     .md_map       = 0
 };
 
-
-ucs_status_t ucp_mem_rereg_mds(ucp_context_h context, ucp_md_map_t reg_md_map,
-                               void *address, size_t length, unsigned uct_flags,
-                               uct_md_h alloc_md, ucs_memory_type_t mem_type,
-                               uct_mem_h *alloc_md_memh_p, uct_mem_h *uct_memh,
-                               ucp_md_map_t *md_map_p)
+UCS_PROFILE_FUNC(ucs_status_t, ucp_mem_rereg_mds,
+                 (context, reg_md_map, address, length, uct_flags, alloc_md,
+                  mem_type, alloc_md_memh_p, uct_memh, md_map_p),
+                 ucp_context_h context, ucp_md_map_t reg_md_map, void *address,
+                 size_t length, unsigned uct_flags, uct_md_h alloc_md,
+                 ucs_memory_type_t mem_type, uct_mem_h *alloc_md_memh_p,
+                 uct_mem_h *uct_memh, ucp_md_map_t *md_map_p)
 {
     unsigned memh_index, prev_memh_index;
     uct_mem_h *prev_uct_memh;
@@ -167,7 +169,6 @@ err_dereg:
     ucp_mem_rereg_mds(context, 0, NULL, 0, 0, alloc_md, mem_type,
                       alloc_md_memh_p, uct_memh, md_map_p);
     return status;
-
 }
 
 /**

@@ -37,6 +37,10 @@ ucp_tag_recv_common(ucp_worker_h worker, void *buffer, size_t count,
     ucp_trace_req(req, "%s buffer %p dt 0x%lx count %zu tag %"PRIx64"/%"PRIx64,
                   debug_name, buffer, datatype, count, tag, tag_mask);
 
+#if ENABLE_DEBUG_DATA
+    req->recv.rndv_req = NULL;
+#endif
+
     /* First, check the fast path case - single fragment
      * in this case avoid initializing most of request fields
      * */
@@ -90,6 +94,7 @@ ucp_tag_recv_common(ucp_worker_h worker, void *buffer, size_t count,
         req->flags         |= UCP_REQUEST_FLAG_BLOCK_OFFLOAD;
     }
 
+    req->recv.count         = count;
     req->recv.length        = ucp_dt_length(datatype, count, buffer,
                                             &req->recv.state);
     req->recv.mem_type      = ucp_request_get_memory_type(worker->context, buffer,

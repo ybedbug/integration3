@@ -62,6 +62,8 @@ static ucs_status_t ucp_proto_eager_bcopy_multi_common_init(
         .super.super         = *init_params,
         .super.cfg_thresh    = context->config.ext.bcopy_thresh,
         .super.cfg_priority  = 20,
+        .super.min_length    = 0,
+        .super.max_length    = SIZE_MAX,
         .super.min_frag_offs = UCP_PROTO_COMMON_OFFSET_INVALID,
         .super.max_frag_offs = ucs_offsetof(uct_iface_attr_t, cap.am.max_bcopy),
         .super.hdr_size      = hdr_size,
@@ -260,6 +262,8 @@ ucp_proto_eager_zcopy_multi_init(const ucp_proto_init_params_t *init_params)
         .super.super         = *init_params,
         .super.cfg_thresh    = context->config.ext.zcopy_thresh,
         .super.cfg_priority  = 30,
+        .super.min_length    = 1,
+        .super.max_length    = SIZE_MAX,
         .super.min_frag_offs = ucs_offsetof(uct_iface_attr_t, cap.am.min_zcopy),
         .super.max_frag_offs = ucs_offsetof(uct_iface_attr_t, cap.am.max_zcopy),
         .super.hdr_size      = sizeof(ucp_eager_first_hdr_t),
@@ -295,9 +299,10 @@ ucp_proto_eager_zcopy_multi_send_func(ucp_request_t *req,
         ucp_proto_eager_set_middle_hdr(req, &hdr.middle);
     }
 
-    ucp_datatype_iter_next_iov(&req->send.state.dt_iter, lpriv->super.memh_index,
-                               ucp_proto_multi_max_payload(req, lpriv, hdr_size),
-                               next_iter, &iov);
+    ucp_datatype_iter_next_iov(&req->send.state.dt_iter,
+                               ucp_proto_multi_max_payload(req, lpriv,
+                                                           hdr_size),
+                               lpriv->super.memh_index, next_iter, &iov);
     return uct_ep_am_zcopy(req->send.ep->uct_eps[lpriv->super.lane], am_id, &hdr,
                            hdr_size, &iov, 1, 0, &req->send.state.uct_comp);
 }

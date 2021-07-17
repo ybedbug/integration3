@@ -19,7 +19,9 @@
 #include <ucs/datastruct/mpool.h>
 #include <ucs/datastruct/queue_types.h>
 #include <ucs/debug/assert.h>
+#include <ucs/memory/memory_type.h>
 #include <ucp/dt/dt.h>
+#include <ucp/proto/proto_common.h> /* for complete_cb */
 #include <ucp/rma/rma.h>
 #include <ucp/wireup/wireup.h>
 #include <ucp/core/ucp_am.h>
@@ -52,13 +54,15 @@ enum {
     UCP_REQUEST_FLAG_RECV_TAG              = UCS_BIT(17),
     UCP_REQUEST_FLAG_RKEY_INUSE            = UCS_BIT(18),
 #if UCS_ENABLE_ASSERT
-    UCP_REQUEST_FLAG_STREAM_RECV           = UCS_BIT(19),
-    UCP_REQUEST_DEBUG_FLAG_EXTERNAL        = UCS_BIT(20),
-    UCP_REQUEST_FLAG_SUPER_VALID           = UCS_BIT(21)
+    UCP_REQUEST_FLAG_STREAM_RECV           = UCS_BIT(28),
+    UCP_REQUEST_DEBUG_FLAG_EXTERNAL        = UCS_BIT(29),
+    UCP_REQUEST_FLAG_SUPER_VALID           = UCS_BIT(30),
+    UCP_REQUEST_FLAG_IN_MPOOL              = UCS_BIT(31)
 #else
     UCP_REQUEST_FLAG_STREAM_RECV           = 0,
     UCP_REQUEST_DEBUG_FLAG_EXTERNAL        = 0,
-    UCP_REQUEST_FLAG_SUPER_VALID           = 0
+    UCP_REQUEST_FLAG_SUPER_VALID           = 0,
+    UCP_REQUEST_FLAG_IN_MPOOL              = 0
 #endif
 };
 
@@ -218,6 +222,9 @@ struct ucp_request {
                     /* Key for remote buffer get/put operation */
                     ucp_rkey_h        rkey;
 
+                    /* Descriptor for staging rendezvous data */
+                    ucp_mem_desc_t    *mdesc;
+
                     union {
                         /* Used by version 1 rendezvous protocols */
                         struct {
@@ -231,16 +238,27 @@ struct ucp_request {
                             uint8_t        rkey_index[UCP_MAX_LANES];
                         };
 
-                        /* Used by rndv/put */
+                        /* Used by version 2 rendezvous protocols */
                         struct {
-                            /* fence mode: which lanes sent ATP
-                            flush mode: which lanes completed flush
-                            */
-                            ucp_lane_map_t flush_map;
+                            /* Data start offset of this request TODO */
+                            size_t offset;
 
-                            /* which lanes need to send atp */
-                            ucp_lane_map_t atp_map;
-                        } put;
+                            /* Used by rndv/put and rndv/put/frag */
+                            struct {
+                                /* fence mode: which lanes sent ATP
+                                flush mode: which lanes completed flush
+                                */
+                                ucp_lane_map_t flush_map;
+
+                                /* which lanes need to send atp */
+                                ucp_lane_map_t atp_map;
+                            } put;
+
+                            /* Used by rndv/send/ppln and rndv/recv/ppln */
+                            struct {
+                                uint8_t send_ack;
+                            } ppln;
+                        };
                     };
                 } rndv;
 
@@ -264,6 +282,8 @@ struct ucp_request {
                     size_t            length;
                     /* Offset in the receiver's buffer */
                     size_t            offset;
+                    /* Remote request ID received from a peer */
+                    ucs_ptr_map_key_t remote_req_id;
                 } rndv_rtr;
 
                 struct {
@@ -326,7 +346,6 @@ struct ucp_request {
             ucp_lane_index_t      lane;            /* Lane on which this request is being sent */
             uint8_t               proto_stage;     /* Protocol current stage */
             uct_pending_req_t     uct;             /* UCT pending request */
-            ucp_mem_desc_t        *mdesc;
         } send;
 
         /* "receive" part - used for tag_recv, am_recv and stream_recv operations */
@@ -334,6 +353,7 @@ struct ucp_request {
             ucs_queue_elem_t      queue;    /* Expected queue element */
             void                  *buffer;  /* Buffer to receive data to */
             ucp_datatype_t        datatype; /* Receive type */
+            size_t                count;
             size_t                length;   /* Total length, in bytes */
             ucs_memory_type_t     mem_type; /* Memory type */
             ucp_dt_state_t        state;
@@ -341,9 +361,9 @@ struct ucp_request {
             uct_tag_context_t     uct_ctx;  /* Transport offload context */
             ssize_t               remaining;  /* How much more data
                                                * to be received */
-
-            /* Remote request ID received from a peer */
-            ucs_ptr_map_key_t     remote_req_id;
+#if ENABLE_DEBUG_DATA
+            ucp_request_t         *rndv_req;
+#endif
 
             union {
                 struct {

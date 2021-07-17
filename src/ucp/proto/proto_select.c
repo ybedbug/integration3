@@ -13,10 +13,10 @@
 #include "proto_single.h"
 
 #include <ucp/core/ucp_context.h>
-#include <ucp/core/ucp_worker.h>
 #include <ucp/dt/dt.h>
 #include <float.h>
 
+#include <ucp/core/ucp_worker.inl>
 #include <ucs/datastruct/array.inl>
 
 
@@ -416,19 +416,19 @@ ucp_proto_select_init_protocols(ucp_worker_h worker,
         goto err;
     }
 
-    offset = 0;
+    offset    = 0;
     for (proto_id = 0; proto_id < ucp_protocols_count; ++proto_id) {
         proto_caps            = &proto_init->caps[proto_id];
         init_params.priv      = UCS_PTR_BYTE_OFFSET(proto_init->priv_buf,
-                                                          offset);
+                                                    offset);
         init_params.priv_size  = &priv_size;
         init_params.caps       = proto_caps;
         init_params.proto_name = ucp_proto_id_field(proto_id, name);
 
         ucs_trace("trying %s", ucp_proto_id_field(proto_id, name));
         ucs_log_indent(1);
-
         status = ucp_proto_id_call(proto_id, init, &init_params);
+
         if (status != UCS_OK) {
             if (status != UCS_ERR_UNSUPPORTED) {
                 ucs_trace("protocol %s failed to initialize: %s",
@@ -442,13 +442,35 @@ ucp_proto_select_init_protocols(ucp_worker_h worker,
         ucs_string_buffer_init(&strb);
         ucp_proto_id_call(proto_id, config_str, proto_caps->min_length,
                           SIZE_MAX, init_params.priv, &strb);
-        ucs_trace("protocol %s has %u ranges, min_length %s, cfg_thresh %s %s",
-                  ucp_proto_id_field(proto_id, name), proto_caps->num_ranges,
+        ucs_trace("protocol %s min_length %s, cfg_thresh %s %s",
+                  ucp_proto_id_field(proto_id, name),
                   ucs_memunits_to_str(proto_caps->min_length, min_length_str,
                                       sizeof(min_length_str)),
                   ucs_memunits_to_str(proto_caps->cfg_thresh, thresh_str,
                                       sizeof(thresh_str)),
                   ucs_string_buffer_cstr(&strb));
+        {
+            size_t range_start = 0;
+            int i;
+
+            ucs_log_indent(1);
+            for (i = 0; i < proto_caps->num_ranges; ++i) {
+                ucs_trace("[%d] %s single:" UCP_PROTO_PERF_FUNC_FMT
+                          " multi:" UCP_PROTO_PERF_FUNC_FMT,
+                          i,
+                          ucs_memunits_range_str(
+                                  range_start, proto_caps->ranges[i].max_length,
+                                  thresh_str, sizeof(thresh_str)),
+                          UCP_PROTO_PERF_FUNC_ARG(
+                                  &proto_caps->ranges[i]
+                                           .perf[UCP_PROTO_PERF_TYPE_SINGLE]),
+                          UCP_PROTO_PERF_FUNC_ARG(
+                                  &proto_caps->ranges[i]
+                                           .perf[UCP_PROTO_PERF_TYPE_MULTI]));
+                range_start = proto_caps->ranges[i].max_length + 1;
+            }
+            ucs_log_indent(-1);
+        }
         ucs_string_buffer_cleanup(&strb);
 
         ucs_log_indent(-1);
@@ -508,8 +530,8 @@ static ucs_status_t ucp_proto_select_elem_init_thresh(
     ucp_proto_select_range_t *perf_ranges, *tmp_range_elem;
     ucp_proto_threshold_tmp_elem_t *tmp_thresh_elem;
     ucp_proto_threshold_elem_t *thresholds;
-    size_t msg_length, max_length;
     ucp_proto_config_t *proto_config;
+    size_t msg_length, max_length;
     ucp_proto_id_t proto_id;
     ucs_status_t status;
     size_t priv_offset;
@@ -606,8 +628,12 @@ err:
 static ucp_proto_perf_type_t
 ucp_proto_select_param_perf_type(const ucp_proto_select_param_t *select_param)
 {
-    /* TODO select according to operation flags */
-    return UCP_PROTO_PERF_TYPE_SINGLE;
+    if (ucp_proto_select_op_attr_from_flags(select_param->op_flags) &
+        UCP_OP_ATTR_FLAG_MULTI_SEND) {
+        return UCP_PROTO_PERF_TYPE_MULTI;
+    } else {
+        return UCP_PROTO_PERF_TYPE_SINGLE;
+    }
 }
 
 static ucs_status_t
@@ -681,7 +707,7 @@ static void  ucp_proto_select_cache_reset(ucp_proto_select_t *proto_select)
     proto_select->cache.value = NULL;
 }
 
-ucp_proto_select_elem_t *
+const ucp_proto_select_elem_t *
 ucp_proto_select_lookup_slow(ucp_worker_h worker,
                              ucp_proto_select_t *proto_select,
                              ucp_worker_cfg_index_t ep_cfg_index,
@@ -1001,28 +1027,34 @@ void ucp_proto_select_param_str(const ucp_proto_select_param_t *select_param,
     ucs_string_buffer_appendf(strb, "%s(",
                               ucp_operation_names[select_param->op_id]);
 
-    ucs_string_buffer_appendf(strb, "%s",
-                              ucp_datatype_class_names[select_param->dt_class]);
-
-    if (select_param->sg_count > 1) {
-        ucs_string_buffer_appendf(strb, "[%d]", select_param->sg_count);
+    if (select_param->dt_class != UCP_DATATYPE_CONTIG) {
+        ucs_string_buffer_appendf(strb, "%s,",
+                                  ucp_datatype_class_short_names[select_param->dt_class]);
+        if (select_param->sg_count > 1) {
+            ucs_string_buffer_appendf(strb, "%u,", select_param->sg_count);
+        }
     }
 
     if (select_param->mem_type != UCS_MEMORY_TYPE_HOST) {
         ucs_string_buffer_appendf(
-                strb, ", %s", ucs_memory_type_names[select_param->mem_type]);
+                strb, "%s,", ucs_memory_type_names[select_param->mem_type]);
     }
 
     if (select_param->sys_dev != UCS_SYS_DEVICE_ID_UNKNOWN) {
-        ucs_topo_sys_device_bdf_name(select_param->sys_dev, sys_dev_name,
-                                     sizeof(sys_dev_name));
-        ucs_string_buffer_appendf(strb, ", %s", sys_dev_name);
+        ucs_topo_sys_device_bdf_name_short(select_param->sys_dev, sys_dev_name,
+                                           sizeof(sys_dev_name));
+        ucs_string_buffer_appendf(strb, "%s,", sys_dev_name);
     }
 
     if (op_attr_mask & UCP_OP_ATTR_FLAG_FAST_CMPL) {
-        ucs_string_buffer_appendf(strb, ", fast-completion");
+        ucs_string_buffer_appendf(strb, "fc,");
     }
 
+    if (op_attr_mask & UCP_OP_ATTR_FLAG_MULTI_SEND) {
+        ucs_string_buffer_appendf(strb, "multi,");
+    }
+
+    ucs_string_buffer_rtrim(strb, ",");
     ucs_string_buffer_appendf(strb, ")");
 }
 
@@ -1048,6 +1080,7 @@ ucp_proto_select_short_init(ucp_worker_h worker, ucp_proto_select_t *proto_selec
     ucp_proto_select_param_t select_param;
     const ucp_proto_single_priv_t *spriv;
     ucp_memory_info_t mem_info;
+    ssize_t max_short_signed;
     uint32_t op_attr;
 
     ucp_memory_info_set_host(&mem_info);
@@ -1074,12 +1107,14 @@ ucp_proto_select_short_init(ucp_worker_h worker, ucp_proto_select_t *proto_selec
             goto out_disable;
         }
 
+        max_short_signed = ucs_min(thresh->max_msg_length, SSIZE_MAX);
+
         /* Assume short protocol uses 'ucp_proto_single_priv_t' */
         spriv = thresh->proto_config.priv;
 
         if (proto == NULL) {
             proto                            = thresh->proto_config.proto;
-            proto_short->max_length_host_mem = thresh->max_msg_length;
+            proto_short->max_length_host_mem = max_short_signed;
             proto_short->lane                = spriv->super.lane;
             proto_short->rkey_index          = spriv->super.rkey_index;
         } else {
@@ -1092,7 +1127,7 @@ ucp_proto_select_short_init(ucp_worker_h worker, ucp_proto_select_t *proto_selec
 
             /* Fast-path threshold is the minimal of all op_attr options */
             proto_short->max_length_host_mem = ucs_min(
-                    proto_short->max_length_host_mem, thresh->max_msg_length);
+                    proto_short->max_length_host_mem, max_short_signed);
         }
     }
 
@@ -1133,4 +1168,65 @@ void ucp_proto_select_get_valid_range(
 
         ++elem;
     } while (max_msg_length < SIZE_MAX);
+}
+
+void ucp_proto_threshold_elem_str(const ucp_proto_threshold_elem_t *thresh_elem,
+                                  size_t min_length, size_t max_length,
+                                  ucs_string_buffer_t *strb)
+{
+    size_t range_start, range_end;
+    const ucp_proto_t *proto;
+    char str[64];
+
+    range_start = 0;
+    do {
+        range_end = thresh_elem->max_msg_length;
+
+        /* Print only protocols within the range provided by {min,max}_length */
+        if ((range_end >= min_length) && (range_start <= max_length)) {
+            proto = thresh_elem->proto_config.proto;
+            ucs_string_buffer_appendf(strb, "%s(", proto->name);
+            proto->config_str(ucs_max(range_start, min_length),
+                              ucs_min(range_end, max_length),
+                              thresh_elem->proto_config.priv, strb);
+            ucs_string_buffer_appendf(strb, ")");
+
+            if (range_end < max_length) {
+                ucs_memunits_to_str(thresh_elem->max_msg_length, str,
+                                    sizeof(str));
+                ucs_string_buffer_appendf(strb, "<=%s<", str);
+            }
+        }
+
+        ++thresh_elem;
+        range_start = range_end + 1;
+    } while (range_end < max_length);
+
+    ucs_string_buffer_rtrim(strb, "<");
+}
+
+ucp_proto_select_t *
+ucp_proto_select_get(ucp_worker_h worker, ucp_worker_cfg_index_t ep_cfg_index,
+                     ucp_worker_cfg_index_t rkey_cfg_index,
+                     ucp_worker_cfg_index_t *new_rkey_cfg_index)
+{
+    ucp_rkey_config_key_t rkey_config_key;
+    ucs_status_t status;
+
+    if (rkey_cfg_index == UCP_WORKER_CFG_INDEX_NULL) {
+        *new_rkey_cfg_index = UCP_WORKER_CFG_INDEX_NULL;
+        return &worker->ep_config[ep_cfg_index].proto_select;
+    } else {
+        rkey_config_key = worker->rkey_config[rkey_cfg_index].key;
+
+        rkey_config_key.ep_cfg_index = ep_cfg_index;
+        status = ucp_worker_rkey_config_get(worker, &rkey_config_key, NULL,
+                                            new_rkey_cfg_index);
+        if (status != UCS_OK) {
+            ucs_error("failed to switch to new rkey");
+            return NULL;
+        }
+
+        return &worker->rkey_config[*new_rkey_cfg_index].proto_select;
+    }
 }

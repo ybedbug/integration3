@@ -53,6 +53,8 @@ ucp_proto_eager_short_init(const ucp_proto_init_params_t *init_params)
         .super.overhead      = 0,
         .super.cfg_thresh    = UCS_MEMUNITS_AUTO,
         .super.cfg_priority  = 0,
+        .super.min_length    = 0,
+        .super.max_length    = SIZE_MAX,
         .super.min_frag_offs = UCP_PROTO_COMMON_OFFSET_INVALID,
         .super.max_frag_offs = ucs_offsetof(uct_iface_attr_t, cap.am.max_short),
         .super.hdr_size      = sizeof(ucp_tag_hdr_t),
@@ -118,6 +120,8 @@ ucp_proto_eager_bcopy_single_init(const ucp_proto_init_params_t *init_params)
         .super.overhead      = 5e-9,
         .super.cfg_thresh    = context->config.ext.bcopy_thresh,
         .super.cfg_priority  = 20,
+        .super.min_length    = 0,
+        .super.max_length    = SIZE_MAX,
         .super.min_frag_offs = UCP_PROTO_COMMON_OFFSET_INVALID,
         .super.max_frag_offs = ucs_offsetof(uct_iface_attr_t, cap.am.max_bcopy),
         .super.hdr_size      = sizeof(ucp_tag_hdr_t),
@@ -154,6 +158,8 @@ ucp_proto_eager_zcopy_single_init(const ucp_proto_init_params_t *init_params)
         .super.overhead      = 0,
         .super.cfg_thresh    = context->config.ext.zcopy_thresh,
         .super.cfg_priority  = 30,
+        .super.min_length    = 1,
+        .super.max_length    = SIZE_MAX,
         .super.min_frag_offs = ucs_offsetof(uct_iface_attr_t, cap.am.min_zcopy),
         .super.max_frag_offs = ucs_offsetof(uct_iface_attr_t, cap.am.max_zcopy),
         .super.hdr_size      = sizeof(ucp_tag_hdr_t),
@@ -172,7 +178,7 @@ ucp_proto_eager_zcopy_single_init(const ucp_proto_init_params_t *init_params)
     return ucp_proto_single_init(&params);
 }
 
-static ucs_status_t
+static UCS_F_ALWAYS_INLINE ucs_status_t
 ucp_proto_eager_zcopy_send_func(ucp_request_t *req,
                                 const ucp_proto_single_priv_t *spriv,
                                 const uct_iov_t *iov)

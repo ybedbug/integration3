@@ -16,7 +16,8 @@ ucp_proto_rdnv_am_init_common(ucp_proto_multi_init_params_t *params)
 {
     ucp_context_h context = params->super.super.worker->context;
 
-    if (params->super.super.select_param->op_id != UCP_OP_ID_RNDV_SEND) {
+    if ((params->super.super.select_param->op_id != UCP_OP_ID_RNDV_SEND) ||
+        ucp_proto_rndv_init_params_is_ppln_frag(&params->super.super)) {
         return UCS_ERR_UNSUPPORTED;
     }
 
@@ -24,9 +25,10 @@ ucp_proto_rdnv_am_init_common(ucp_proto_multi_init_params_t *params)
             ucp_proto_rndv_cfg_thresh(context, UCS_BIT(UCP_RNDV_MODE_AM));
     params->super.overhead   = 10e-9; /* for multiple lanes management */
     params->super.latency    = 0;
+    params->super.hdr_size   = sizeof(ucp_rndv_data_hdr_t);
+    params->super.memtype_op = UCT_EP_OP_GET_SHORT;
     params->first.lane_type  = UCP_LANE_TYPE_AM;
     params->middle.lane_type = UCP_LANE_TYPE_AM_BW;
-    params->super.hdr_size   = sizeof(ucp_rndv_data_hdr_t);
     params->max_lanes        = context->config.ext.max_rndv_lanes;
 
     return ucp_proto_multi_init(params, params->super.super.priv,
@@ -74,6 +76,7 @@ static UCS_F_ALWAYS_INLINE ucs_status_t
 ucp_proto_rndv_am_bcopy_complete(ucp_request_t *req)
 {
     ucp_proto_rndv_rkey_destroy(req);
+    /* Memory could be registered when we sent the RTS */
     ucp_datatype_iter_mem_dereg(req->send.ep->worker->context,
                                 &req->send.state.dt_iter);
     return ucp_proto_request_bcopy_complete_success(req);
@@ -96,6 +99,8 @@ ucp_proto_rdnv_am_bcopy_init(const ucp_proto_init_params_t *init_params)
         .super.super         = *init_params,
         .super.cfg_thresh    = UCS_MEMUNITS_AUTO,
         .super.cfg_priority  = 0,
+        .super.min_length    = 0,
+        .super.max_length    = SIZE_MAX,
         .super.min_frag_offs = UCP_PROTO_COMMON_OFFSET_INVALID,
         .super.max_frag_offs = ucs_offsetof(uct_iface_attr_t, cap.am.max_bcopy),
         .super.memtype_op    = UCT_EP_OP_GET_SHORT,
@@ -104,6 +109,7 @@ ucp_proto_rdnv_am_bcopy_init(const ucp_proto_init_params_t *init_params)
         .middle.tl_cap_flags = UCT_IFACE_FLAG_AM_BCOPY,
     };
 
+    // TODO remove ucp_proto_rdnv_am_init_common helper
     return ucp_proto_rdnv_am_init_common(&params);
 }
 

@@ -201,7 +201,9 @@ ucs_status_ptr_t ucp_put_nb(ucp_ep_h ep, const void *buffer, size_t length,
                             ucp_send_callback_t cb)
 {
     ucp_request_param_t param = {
-        .op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK,
+        .op_attr_mask = UCP_OP_ATTR_FIELD_CALLBACK |
+        /* TODO pass FAST_CMPL flag from OpenSHMEM */
+                        UCP_OP_ATTR_FLAG_FAST_CMPL,
         .cb.send      = (ucp_send_nbx_callback_t)cb
     };
 
@@ -269,7 +271,7 @@ ucs_status_ptr_t ucp_put_nbx(ucp_ep_h ep, const void *buffer, size_t count,
                                         &ucp_rkey_config(worker, rkey)->proto_select,
                                         rkey->cfg_index, req, UCP_OP_ID_PUT,
                                         buffer, count, ucp_dt_make_contig(1),
-                                        count, param);
+                                        count, param, 0);
     } else {
         status = UCP_RKEY_RESOLVE(rkey, ep, rma);
         if (status != UCS_OK) {
@@ -369,7 +371,7 @@ ucs_status_ptr_t ucp_get_nbx(ucp_ep_h ep, void *buffer, size_t count,
                                         &ucp_rkey_config(worker, rkey)->proto_select,
                                         rkey->cfg_index, req, UCP_OP_ID_GET,
                                         buffer, count, ucp_dt_make_contig(1),
-                                        count, param);
+                                        count, param, 0);
     } else {
         status = UCP_RKEY_RESOLVE(rkey, ep, rma);
         if (status != UCS_OK) {
@@ -392,9 +394,13 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_put, (ep, buffer, length, remote_addr, rkey),
                  ucp_ep_h ep, const void *buffer, size_t length,
                  uint64_t remote_addr, ucp_rkey_h rkey)
 {
+    ucp_request_param_t param = {
+        .op_attr_mask = UCP_OP_ATTR_FLAG_FAST_CMPL,
+    };
+
     return ucp_rma_wait(ep->worker,
-                        ucp_put_nb(ep, buffer, length, remote_addr, rkey,
-                                   (ucp_send_callback_t)ucs_empty_function),
+                        ucp_put_nbx(ep, buffer, length, remote_addr, rkey,
+                                    &param),
                         "put");
 }
 
@@ -402,8 +408,12 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_get, (ep, buffer, length, remote_addr, rkey),
                  ucp_ep_h ep, void *buffer, size_t length,
                  uint64_t remote_addr, ucp_rkey_h rkey)
 {
+    ucp_request_param_t param = {
+        .op_attr_mask = UCP_OP_ATTR_FLAG_FAST_CMPL,
+    };
+
     return ucp_rma_wait(ep->worker,
-                        ucp_get_nb(ep, buffer, length, remote_addr, rkey,
-                                   (ucp_send_callback_t)ucs_empty_function),
+                        ucp_get_nbx(ep, buffer, length, remote_addr, rkey,
+                                    &param),
                         "get");
 }

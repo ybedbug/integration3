@@ -148,8 +148,8 @@ ucs_status_t ucs_topo_get_distance(ucs_sys_device_t device1,
      * TODO implement more accurate estimation, based on system type, PCIe
      * switch, etc.
      */
-    distance->latency   = 100e-9 * path_distance;
-    distance->bandwidth = (20000 / path_distance) * UCS_MBYTE;
+    distance->latency   = 100e-9 * (path_distance - 1);
+    distance->bandwidth = (10000 / path_distance) * UCS_MBYTE;
     return UCS_OK;
 
 default_distance:
@@ -192,6 +192,29 @@ ucs_topo_sys_device_bdf_name(ucs_sys_device_t sys_dev, char *buffer, size_t max)
     bus_id = &ucs_topo_ctx.sys_dev_to_bus_lookup.bus_arr[sys_dev];
     ucs_snprintf_safe(buffer, max, "%04x:%02x:%02x.%d", bus_id->domain,
                       bus_id->bus, bus_id->slot, bus_id->function);
+    return buffer;
+}
+
+const char *
+ucs_topo_sys_device_bdf_name_short(ucs_sys_device_t sys_dev, char *buffer, size_t max)
+{
+    const ucs_sys_bus_id_t *bus_id;
+
+    if (sys_dev == UCS_SYS_DEVICE_ID_UNKNOWN) {
+        return "unk";
+    }
+
+    if (sys_dev >= ucs_topo_ctx.sys_dev_to_bus_lookup.count) {
+        return NULL;
+    }
+
+    bus_id = &ucs_topo_ctx.sys_dev_to_bus_lookup.bus_arr[sys_dev];
+    if (bus_id->domain != 0) {
+        return ucs_topo_sys_device_bdf_name(sys_dev, buffer, max);
+    }
+
+    ucs_snprintf_safe(buffer, max, "%02x:%02x.%d", bus_id->bus, bus_id->slot,
+                      bus_id->function);
     return buffer;
 }
 

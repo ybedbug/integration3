@@ -54,12 +54,20 @@
     ({ \
         ucp_request_t *_req = ucs_mpool_get_inline(&(_worker)->req_mp); \
         if (_req != NULL) { \
-            ucs_trace_req("allocated request %p", _req); \
-            ucp_request_reset_internal(_req, _worker); \
+            ucp_request_get_internal(_req, _worker); \
             UCS_PROFILE_REQUEST_NEW(_req, "ucp_request", 0); \
+            ucs_trace_req("worker %p: allocated request %p", _worker, _req); \
         } \
         _req; \
     })
+
+/* defined as a macro to print the release site */
+#define ucp_request_put(_req) \
+    { \
+        ucs_trace_req("put request %p", _req); \
+        UCS_PROFILE_REQUEST_FREE(_req); \
+        ucp_request_put_internal(_req); \
+    }
 
 #define ucp_request_complete(_req, _cb, _status, ...) \
     { \
@@ -90,7 +98,6 @@
         ucs_trace_data("request %p %s set to %p, user data: %p", \
                       _req, #_cb, _cb_value, _user_data); \
     }
-
 
 #define ucp_request_get_param(_worker, _param, _failed) \
     ({ \
@@ -189,20 +196,24 @@ static UCS_F_ALWAYS_INLINE void ucp_request_id_reset(ucp_request_t *req)
 }
 
 static UCS_F_ALWAYS_INLINE void
-ucp_request_reset_internal(ucp_request_t *req, ucp_worker_h worker)
+ucp_request_get_internal(ucp_request_t *req, ucp_worker_h worker)
 {
     VALGRIND_MAKE_MEM_DEFINED(&req->id, sizeof(req->id));
     VALGRIND_MAKE_MEM_DEFINED(req + 1, worker->context->config.request.size);
     ucp_request_id_check(req, ==, UCS_PTR_MAP_KEY_INVALID);
+    VALGRIND_MAKE_MEM_DEFINED(&req->flags, sizeof(req->flags));
+    ucs_assert(req->flags & UCP_REQUEST_FLAG_IN_MPOOL);
+    req->flags &= ~UCP_REQUEST_FLAG_IN_MPOOL;
+    VALGRIND_MAKE_MEM_UNDEFINED(&req->flags, sizeof(req->flags));
 }
 
 static UCS_F_ALWAYS_INLINE void
-ucp_request_put(ucp_request_t *req)
+ucp_request_put_internal(ucp_request_t *req)
 {
-    ucs_trace_req("put request %p", req);
     ucp_request_id_check(req, ==, UCS_PTR_MAP_KEY_INVALID);
-    UCS_PROFILE_REQUEST_FREE(req);
     UCP_REQUEST_RESET(req);
+    ucs_assert(!(req->flags & UCP_REQUEST_FLAG_IN_MPOOL));
+    req->flags |= UCP_REQUEST_FLAG_IN_MPOOL;
     ucs_mpool_put_inline(req);
 }
 
@@ -333,7 +344,7 @@ static int UCS_F_ALWAYS_INLINE ucp_request_try_send(ucp_request_t *req)
  * Start sending a request.
  *
  * @param [in]  req             Request to start.
- * */
+ */
 static UCS_F_ALWAYS_INLINE void
 ucp_request_send(ucp_request_t *req)
 {
@@ -460,7 +471,7 @@ ucp_request_send_state_advance(ucp_request_t *req,
          */
         return;
     }
-    
+
     if (ucs_unlikely(UCS_STATUS_IS_ERR(status))) {
         ucp_request_send_state_ff(req, status);
         return;
@@ -966,6 +977,16 @@ ucp_request_get_super(ucp_request_t *req)
     return req->super_req;
 }
 
+static UCS_F_ALWAYS_INLINE ucp_request_t *
+ucp_request_user_data_get_super(void *request, void *user_data)
+{
+    ucp_request_t UCS_V_UNUSED *req = (ucp_request_t*)request - 1;
+    ucp_request_t *super_req        = (ucp_request_t*)user_data;
+
+    ucs_assert(ucp_request_get_super(req) == super_req);
+    return super_req;
+}
+
 static UCS_F_ALWAYS_INLINE void
 ucp_request_param_rndv_thresh(ucp_request_t *req,
                               const ucp_request_param_t *param,
@@ -987,6 +1008,7 @@ static UCS_F_ALWAYS_INLINE void
 ucp_invoke_uct_completion(uct_completion_t *comp, ucs_status_t status)
 {
     uct_completion_update_status(comp, status);
+    ucs_assert(comp->count > 0);
     if (--comp->count == 0) {
         comp->func(comp);
     }

@@ -209,23 +209,8 @@ void ucp_test::disconnect(entity& e) {
     }
 }
 
-ucp_tag_message_h ucp_test::message_wait(entity& e, ucp_tag_t tag,
-                                         ucp_tag_t tag_mask,
-                                         ucp_tag_recv_info_t *info, int remove,
-                                         int worker_index)
-{
-    ucs_time_t deadline = ucs::get_deadline();
-    ucp_tag_message_h message;
-    do {
-        progress(worker_index);
-        message = ucp_tag_probe_nb(e.worker(worker_index), tag, tag_mask,
-                                   remove, info);
-    } while ((message == NULL) && (ucs_get_time() < deadline));
-
-    return message;
-}
-
-ucs_status_t ucp_test::request_process(void *req, int worker_index, bool wait)
+ucs_status_t
+ucp_test::request_process(void *req, int worker_index, bool wait, bool release)
 {
     if (req == NULL) {
         return UCS_OK;
@@ -258,13 +243,16 @@ ucs_status_t ucp_test::request_process(void *req, int worker_index, bool wait)
                   ucs_status_string(status));
     }
 
-    ucp_request_release(req);
+    if (release) {
+        ucp_request_release(req);
+    }
+
     return status;
 }
 
 ucs_status_t ucp_test::request_wait(void *req, int worker_index)
 {
-    return request_process(req, worker_index, true);
+    return request_process(req, worker_index, true, true);
 }
 
 ucs_status_t ucp_test::requests_wait(std::vector<void*> &reqs,
@@ -286,7 +274,7 @@ ucs_status_t ucp_test::requests_wait(std::vector<void*> &reqs,
 
 void ucp_test::request_release(void *req)
 {
-    request_process(req, 0, false);
+    request_process(req, 0, false, true);
 }
 
 int ucp_test::max_connections() {

@@ -62,6 +62,8 @@ static ucs_status_t ucp_proto_get_offload_bcopy_progress(uct_pending_req_t *self
     }
 
     return ucp_proto_multi_progress(req, req->send.proto_config->priv,
+                                    // TODO we know the completion func here,
+                                    // can call it directly if count == 0
                                     ucp_proto_get_offload_bcopy_send_func,
                                     ucp_request_invoke_uct_completion_success,
                                     UCS_BIT(UCP_DATATYPE_CONTIG));
@@ -77,6 +79,8 @@ ucp_proto_get_offload_bcopy_init(const ucp_proto_init_params_t *init_params)
         .super.overhead      = 0,
         .super.cfg_thresh    = context->config.ext.bcopy_thresh,
         .super.cfg_priority  = 20,
+        .super.min_length    = 0,
+        .super.max_length    = SIZE_MAX,
         .super.min_frag_offs = UCP_PROTO_COMMON_OFFSET_INVALID,
         .super.max_frag_offs = ucs_offsetof(uct_iface_attr_t,
                                             cap.get.max_bcopy),
@@ -147,6 +151,8 @@ ucp_proto_get_offload_zcopy_init(const ucp_proto_init_params_t *init_params)
         .super.overhead      = 0,
         .super.cfg_thresh    = context->config.ext.zcopy_thresh,
         .super.cfg_priority  = 30,
+        .super.min_length    = 0,
+        .super.max_length    = SIZE_MAX,
         .super.min_frag_offs = ucs_offsetof(uct_iface_attr_t,
                                             cap.get.min_zcopy),
         .super.max_frag_offs = ucs_offsetof(uct_iface_attr_t,

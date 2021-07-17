@@ -50,7 +50,6 @@
         _status;                                                \
     })
 
-
 #define UCT_CUDA_FUNC_LOG_ERR(_func) \
     UCT_CUDA_FUNC(_func, UCS_LOG_LEVEL_ERROR)
 

@@ -148,7 +148,7 @@ static size_t ucp_rndv_rtr_pack(void *dest, void *arg)
     ssize_t packed_rkey_size;
 
     /* Request ID of sender side (remote) */
-    rndv_rtr_hdr->sreq_id = rreq->recv.remote_req_id;
+    rndv_rtr_hdr->sreq_id = rndv_req->send.rndv_rtr.remote_req_id;
     /* Request ID of receiver side (local) */
     rndv_rtr_hdr->rreq_id = ucp_send_request_get_id(rndv_req);
 
@@ -282,7 +282,7 @@ void ucp_rndv_req_send_ack(ucp_request_t *ack_req, ucp_request_t *req,
     ack_req->send.proto.am_id         = am_id;
     ack_req->send.proto.status        = status;
     ack_req->send.proto.remote_req_id = remote_req_id;
-    ack_req->send.proto.comp_cb       = ucp_request_put;
+    ack_req->send.proto.comp_cb       = ucp_proto_request_put_completion;
     ucp_request_send_state_reset(ack_req, NULL,
                                  UCP_REQUEST_SEND_PROTO_BCOPY_AM);
 
@@ -380,11 +380,11 @@ static void ucp_rndv_req_send_rtr(ucp_request_t *rndv_req, ucp_request_t *rreq,
                                  UCP_REQUEST_SEND_PROTO_BCOPY_AM);
     UCP_WORKER_STAT_RNDV(rndv_req->send.ep->worker, SEND_RTR, +1);
 
-    rreq->recv.remote_req_id       = sender_req_id;
     rndv_req->send.lane            = ucp_ep_get_am_lane(rndv_req->send.ep);
     rndv_req->send.uct.func        = ucp_proto_progress_rndv_rtr;
     rndv_req->send.rndv_rtr.length = recv_length;
     rndv_req->send.rndv_rtr.offset = offset;
+    rndv_req->send.rndv_rtr.remote_req_id = sender_req_id;
 
     ucp_request_set_super(rndv_req, rreq);
     ucp_send_request_id_alloc(rndv_req);
@@ -408,12 +408,13 @@ static ucp_lane_index_t ucp_rndv_zcopy_get_lane(ucp_request_t *rndv_req,
         return UCP_NULL_LANE;
     }
 
-    lane_idx   = ucs_ffs64_safe(rndv_req->send.lanes_map_avail);
+    lane_idx = ucs_ffs64_safe(rndv_req->send.lanes_map_avail);
     ucs_assert(lane_idx < UCP_MAX_LANES);
     rkey       = rndv_req->send.rndv.rkey;
     rkey_index = rndv_req->send.rndv.rkey_index[lane_idx];
     *uct_rkey  = (rkey_index != UCP_NULL_RESOURCE) ?
-                 rkey->tl_rkey[rkey_index].rkey.rkey : UCT_INVALID_RKEY;
+                          rkey->tl_rkey[rkey_index].rkey.rkey :
+                          UCT_INVALID_RKEY;
     ep_config  = ucp_ep_config(rndv_req->send.ep);
     return (proto == UCP_REQUEST_SEND_PROTO_RNDV_GET) ?
            ep_config->rndv.get_zcopy.lanes[lane_idx] :
@@ -450,7 +451,7 @@ ucp_rndv_progress_rma_zcopy_common(ucp_request_t *req, ucp_lane_index_t lane,
     ucs_assert_always(req->send.lane != UCP_NULL_LANE);
     ucs_assert_always(req->send.rndv.lanes_count > 0);
 
-    if (req->send.mdesc == NULL) {
+    if (req->send.rndv.mdesc == NULL) {
         status = ucp_send_request_add_reg_lane(req, lane);
         ucs_assert_always(status == UCS_OK);
     }
@@ -498,7 +499,7 @@ ucp_rndv_progress_rma_zcopy_common(ucp_request_t *req, ucp_lane_index_t lane,
      * but it will work on single lane */
     ucp_dt_iov_copy_uct(ep->worker->context, iov, &iovcnt, max_iovcnt, &state,
                         req->send.buffer, ucp_dt_make_contig(1), length,
-                        ucp_ep_md_index(ep, lane), req->send.mdesc);
+                        ucp_ep_md_index(ep, lane), req->send.rndv.mdesc);
 
     for (;;) {
         if (proto == UCP_REQUEST_SEND_PROTO_RNDV_GET) {
@@ -567,8 +568,9 @@ UCS_PROFILE_FUNC_VOID(ucp_rndv_get_completion, (self), uct_completion_t *self)
     ucp_request_send_buffer_dereg(rndv_req);
 
     if (status == UCS_OK) {
-        ucp_rndv_req_send_ack(rndv_req, rreq, rndv_req->send.rndv.remote_req_id,
-                              UCS_OK, UCP_AM_ID_RNDV_ATS, "send_ats");
+        ucp_rndv_req_send_ack(rndv_req, rreq,
+                              rndv_req->send.rndv.remote_req_id, UCS_OK,
+                              UCP_AM_ID_RNDV_ATS, "send_ats");
     } else {
         /* if completing RNDV with the error, just release RNDV request */
         ucp_request_put(rndv_req);
@@ -594,7 +596,7 @@ static void ucp_rndv_req_init_lanes(ucp_request_t *req,
                                     ucp_lane_map_t lanes_map,
                                     uint8_t lanes_count)
 {
-    req->send.lanes_map_avail    = lanes_map;
+    req->send.lanes_map_avail       = lanes_map;
     req->send.rndv.lanes_map_all = lanes_map;
     req->send.rndv.lanes_count   = lanes_count;
 }
@@ -756,14 +758,14 @@ static ucs_status_t ucp_rndv_req_send_rma_get(ucp_request_t *rndv_req,
 
     ucp_trace_req(rndv_req, "start rma_get rreq %p", rreq);
 
-    rndv_req->send.uct.func            = ucp_rndv_progress_rma_get_zcopy;
-    rndv_req->send.buffer              = rreq->recv.buffer;
-    rndv_req->send.mem_type            = rreq->recv.mem_type;
-    rndv_req->send.datatype            = ucp_dt_make_contig(1);
-    rndv_req->send.length              = rndv_rts_hdr->size;
+    rndv_req->send.uct.func               = ucp_rndv_progress_rma_get_zcopy;
+    rndv_req->send.buffer                 = rreq->recv.buffer;
+    rndv_req->send.mem_type               = rreq->recv.mem_type;
+    rndv_req->send.datatype               = ucp_dt_make_contig(1);
+    rndv_req->send.length                 = rndv_rts_hdr->size;
     rndv_req->send.rndv.remote_req_id  = rndv_rts_hdr->sreq.req_id;
     rndv_req->send.rndv.remote_address = rndv_rts_hdr->address;
-    rndv_req->send.pending_lane        = UCP_NULL_LANE;
+    rndv_req->send.pending_lane           = UCP_NULL_LANE;
 
     ucp_request_set_super(rndv_req, rreq);
 
@@ -813,7 +815,7 @@ UCS_PROFILE_FUNC_VOID(ucp_rndv_recv_frag_put_completion, (self),
     ucp_request_t *rndv_req;
 
     /* release memory descriptor */
-    ucs_mpool_put_inline((void*)freq->send.mdesc);
+    ucs_mpool_put_inline((void*)freq->send.rndv.mdesc);
 
     /* rndv_req is NULL in case of put protocol */
     if (!is_put_proto) {
@@ -867,7 +869,7 @@ ucp_rndv_init_mem_type_frag_req(ucp_worker_h worker, ucp_request_t *freq, int rn
     freq->send.length       = length;
     freq->send.datatype     = ucp_dt_make_contig(1);
     freq->send.mem_type     = mem_type;
-    freq->send.mdesc        = mdesc;
+    freq->send.rndv.mdesc   = mdesc;
     freq->send.uct.func     = uct_func;
     freq->send.pending_lane = UCP_NULL_LANE;
 
@@ -1342,11 +1344,11 @@ UCS_PROFILE_FUNC_VOID(ucp_rndv_receive, (worker, rreq, rndv_rts_hdr, rkey_buf),
         goto err;
     }
 
-    rndv_req->flags      = 0;
-    rndv_req->send.ep    = ep;
-    rndv_req->send.mdesc = NULL;
-    is_get_zcopy_failed  = 0;
-    src_mem_type         = UCS_MEMORY_TYPE_HOST;
+    rndv_req->flags           = 0;
+    rndv_req->send.ep         = ep;
+    rndv_req->send.rndv.mdesc = NULL;
+    is_get_zcopy_failed       = 0;
+    src_mem_type              = UCS_MEMORY_TYPE_HOST;
 
     ucp_trace_req(rreq,
                   "rndv matched remote {address 0x%"PRIx64" size %zu sreq_id "
@@ -1637,8 +1639,8 @@ UCS_PROFILE_FUNC_VOID(ucp_rndv_send_frag_put_completion, (self),
     }
 
     /* release memory descriptor */
-    if (freq->send.mdesc != NULL) {
-        ucs_mpool_put_inline((void*)freq->send.mdesc);
+    if (freq->send.rndv.mdesc != NULL) {
+        ucs_mpool_put_inline((void*)freq->send.rndv.mdesc);
     }
 
     fsreq                        = ucp_request_get_super(freq);
@@ -1786,7 +1788,7 @@ static ucs_status_t ucp_rndv_send_start_put_pipeline(ucp_request_t *sreq,
             freq->send.datatype     = ucp_dt_make_contig(1);
             freq->send.mem_type     = UCS_MEMORY_TYPE_HOST;
             freq->send.uct.func     = ucp_rndv_progress_rma_put_zcopy;
-            freq->send.mdesc        = NULL;
+            freq->send.rndv.mdesc   = NULL;
             freq->send.pending_lane = UCP_NULL_LANE;
 
             ucp_request_send(freq);
@@ -1926,7 +1928,7 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_rndv_rtr_handler,
             sreq->send.uct.func            = ucp_rndv_progress_rma_put_zcopy;
             sreq->send.rndv.remote_req_id  = rndv_rtr_hdr->rreq_id;
             sreq->send.rndv.remote_address = rndv_rtr_hdr->address;
-            sreq->send.mdesc               = NULL;
+            sreq->send.rndv.mdesc          = NULL;
             sreq->send.pending_lane        = UCP_NULL_LANE;
 
             ucp_rndv_req_init_zcopy_lane_map(sreq, sreq->send.mem_type,

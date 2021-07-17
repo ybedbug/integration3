@@ -19,7 +19,7 @@ extern "C" {
 class test_ucp_proto : public ucp_test {
 public:
     static void get_test_variants(std::vector<ucp_test_variant>& variants) {
-        add_variant(variants, UCP_FEATURE_TAG | UCP_FEATURE_RMA);
+        add_variant(variants, UCP_FEATURE_TAG);
     }
 
 protected:
@@ -32,7 +32,92 @@ protected:
     ucp_worker_h worker() {
         return sender().worker();
     }
+
+    void show_proto(ucs::detail::message_stream &ms, void *req, size_t length)
+    {
+        UCS_STRING_BUFFER_ONSTACK(strb, 256);
+
+        ucp_request_t *ucp_req = ((ucp_request_t*)req) - 1;
+
+        ucp_req->send.proto_config->proto->config_str(
+                length, length, ucp_req->send.proto_config->priv, &strb);
+
+        ms << ucp_req->send.proto_config->proto->name << " "
+           << ucs_string_buffer_cstr(&strb);
+    }
+
+    void test_select(ucp_operation_id_t op_id, ucs_memory_type_t send_mem_type,
+                     ucs_memory_type_t recv_mem_type, size_t length)
+    {
+        mem_buffer send_buffer(length, send_mem_type);
+        mem_buffer recv_buffer(length, recv_mem_type);
+
+        ucp_request_param_t sparam = {};
+        ucp_request_param_t rparam = {};
+        void *sreq = NULL, *rreq = NULL;
+
+        sparam.op_attr_mask |= UCP_OP_ATTR_FLAG_NO_IMM_CMPL;
+        rparam.op_attr_mask |= UCP_OP_ATTR_FLAG_NO_IMM_CMPL;
+
+        switch (op_id) {
+        case UCP_OP_ID_TAG_SEND:
+            sreq = ucp_tag_send_nbx(sender().ep(), send_buffer.ptr(), length, 1,
+                                    &sparam);
+            short_progress_loop();
+            {
+                ucs::scoped_log_level l(UCS_LOG_LEVEL_TRACE_REQ);
+                rreq = ucp_tag_recv_nbx(receiver().worker(), recv_buffer.ptr(),
+                                        length, 1, 1, &rparam);
+            }
+        default:
+            break;
+        }
+
+        ASSERT_UCS_PTR_OK(sreq);
+        request_wait(rreq);
+
+        if (sreq != NULL) {
+            while (ucp_request_check_status(sreq) == UCS_INPROGRESS) {
+                progress();
+            }
+            ucs::detail::message_stream ms("INFO");
+            ms << ucp_operation_names[op_id] << " "
+               << ucs_memory_type_names[send_mem_type] << "->"
+               << ucs_memory_type_names[recv_mem_type] << "," << length << ": ";
+
+            show_proto(ms, sreq, length);
+            ucp_request_release(sreq);
+        }
+    }
 };
+
+// UCS_TEST_P(test_ucp_proto, select_rndv)
+// {
+//     ucp_proto_select_param_t select_param;
+//     ucp_memory_info_t mem_info;
+
+//     mem_info.sys_dev = 0;
+//     mem_info.type = UCS_MEMORY_TYPE_CUDA;
+//     ucp_proto_select_param_init(UCP_OP_ID_RNDV_SEND,
+//                                 UCP_OP_ATTR_FLAG_MULTI_SEND,
+//                                 UCP_DATATYPE_CONTIG, &mem_info, 1);
+// }
+
+UCS_TEST_P(test_ucp_proto, select)
+{
+    test_select(UCP_OP_ID_TAG_SEND, UCS_MEMORY_TYPE_CUDA,UCS_MEMORY_TYPE_HOST,
+                2 * UCS_MBYTE);
+    // test_select(UCP_OP_ID_TAG_SEND, UCS_MEMORY_TYPE_CUDA, UCS_MEMORY_TYPE_CUDA,
+    //             2 * UCS_MBYTE);
+    // test_select(UCP_OP_ID_TAG_SEND, UCS_MEMORY_TYPE_CUDA, UCS_MEMORY_TYPE_CUDA,
+    //             16 * UCS_KBYTE);
+    // test_select(UCP_OP_ID_TAG_SEND, UCS_MEMORY_TYPE_HOST, UCS_MEMORY_TYPE_CUDA,
+    //             2 * UCS_MBYTE);
+    // test_select(UCP_OP_ID_TAG_SEND, UCS_MEMORY_TYPE_CUDA, UCS_MEMORY_TYPE_HOST,
+    //             2 * UCS_MBYTE);
+    // test_select(UCP_OP_ID_TAG_SEND, UCS_MEMORY_TYPE_CUDA, UCS_MEMORY_TYPE_HOST,
+    //             32 * UCS_KBYTE);
+}
 
 UCS_TEST_P(test_ucp_proto, dump_protocols) {
     ucp_proto_select_param_t select_param;
@@ -116,4 +201,4 @@ UCS_TEST_P(test_ucp_proto, worker_print_info_rkey)
     ucp_worker_print_info(worker(), stdout);
 }
 
-UCP_INSTANTIATE_TEST_CASE(test_ucp_proto)
+UCP_INSTANTIATE_TEST_CASE_GPU_AWARE(test_ucp_proto)

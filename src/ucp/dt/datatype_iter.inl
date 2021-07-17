@@ -103,6 +103,29 @@ ucp_datatype_iter_init(ucp_context_h context, void *buffer, size_t count,
     }
 }
 
+static UCS_F_ALWAYS_INLINE void
+ucp_datatype_iter_slice(const ucp_datatype_iter_t *dt_iter, size_t offset,
+                        size_t length, ucp_datatype_iter_t *sliced_dt_iter)
+{
+    ucs_assertv(dt_iter->dt_class == UCP_DATATYPE_CONTIG, "dt=%d (%s)",
+                dt_iter->dt_class, ucp_datatype_class_names[dt_iter->dt_class]);
+
+    // TODO
+    // - data reg does not really belong to the sliced buffer so it should
+    // not release it
+    // - if we want to copy uct memh, need method to add refcount to uct_memh,
+    //   or remember which md's were cloned and should not be touched
+    // - validate offset/length
+    sliced_dt_iter->dt_class               = dt_iter->dt_class;
+    sliced_dt_iter->mem_info               = dt_iter->mem_info;
+    sliced_dt_iter->length                 = length;
+    sliced_dt_iter->offset                 = 0;
+    sliced_dt_iter->type.contig.buffer     = UCS_PTR_BYTE_OFFSET(
+                                                    dt_iter->type.contig.buffer,
+                                                    offset);
+    sliced_dt_iter->type.contig.reg.md_map = 0;
+}
+
 /*
  * Cleanup datatype iterator. dt_mask is a bitmap of possible datatypes, which
  * could help the compiler eliminate some branches.
@@ -113,6 +136,7 @@ ucp_datatype_iter_cleanup(ucp_datatype_iter_t *dt_iter, unsigned dt_mask)
     if (ucp_datatype_iter_is_class(dt_iter, UCP_DATATYPE_GENERIC, dt_mask)) {
         dt_iter->type.generic.dt_gen->ops.finish(dt_iter->type.generic.state);
     }
+    // TODO cleanup reg (but do it fast, and add param to assume no reg was done)
 }
 
 static UCS_F_ALWAYS_INLINE void
@@ -259,6 +283,31 @@ ucp_datatype_iter_unpack(ucp_datatype_iter_t *dt_iter, ucp_worker_h worker,
     return status;
 }
 
+/* Advances dt iterator, returns length */
+static UCS_F_ALWAYS_INLINE size_t
+ucp_datatype_iter_next(const ucp_datatype_iter_t *dt_iter,
+                       size_t max_length, ucp_datatype_iter_t *next_iter)
+{
+    size_t offset, length;
+
+    offset            = dt_iter->offset;
+    length            = ucs_min(max_length, dt_iter->length - offset);
+    next_iter->offset = offset + length;
+
+    return length;
+}
+
+static UCS_F_ALWAYS_INLINE size_t
+ucp_datatype_iter_get_ptr(const ucp_datatype_iter_t *dt_iter, size_t max_length,
+                          void **ptr)
+{
+    ucs_assert(dt_iter->dt_class == UCP_DATATYPE_CONTIG);
+
+    *ptr = UCS_PTR_BYTE_OFFSET(dt_iter->type.contig.buffer, dt_iter->offset);
+
+    return ucs_min(max_length, dt_iter->length - dt_iter->offset);
+}
+
 /*
  * Returns a pointer to next chunk of data (could be done only on some datatype
  * classes)
@@ -268,16 +317,33 @@ ucp_datatype_iter_next_ptr(const ucp_datatype_iter_t *dt_iter,
                            size_t max_length, ucp_datatype_iter_t *next_iter,
                            void **ptr)
 {
-    size_t offset, length;
+    ucs_assert(dt_iter->dt_class == UCP_DATATYPE_CONTIG);
+    *ptr = UCS_PTR_BYTE_OFFSET(dt_iter->type.contig.buffer, dt_iter->offset);
 
+    return ucp_datatype_iter_next(dt_iter, max_length, next_iter);
+}
+
+static UCS_F_ALWAYS_INLINE void
+ucp_datatype_iter_next_slice(const ucp_datatype_iter_t *dt_iter,
+                             size_t max_length,
+                             ucp_datatype_iter_t *sliced_dt_iter,
+                             ucp_datatype_iter_t *next_iter)
+{
+    size_t length;
+
+    // TODO support/check non contig
+    length = ucp_datatype_iter_next(dt_iter, max_length, next_iter);
+    ucp_datatype_iter_slice(dt_iter, dt_iter->offset, length, sliced_dt_iter);
+}
+
+static UCS_F_ALWAYS_INLINE void
+ucp_datatype_iter_advance(const ucp_datatype_iter_t *dt_iter,
+                          size_t length, ucp_datatype_iter_t *next_iter)
+{
     ucs_assert(dt_iter->dt_class == UCP_DATATYPE_CONTIG);
 
-    offset            = dt_iter->offset;
-    length            = ucs_min(max_length, dt_iter->length - offset);
-    *ptr              = UCS_PTR_BYTE_OFFSET(dt_iter->type.contig.buffer, offset);
-    next_iter->offset = offset + length;
-
-    return length;
+    ucs_assert(dt_iter->offset + length <= dt_iter->length);
+    next_iter->offset = dt_iter->offset + length;
 }
 
 /*
@@ -290,7 +356,7 @@ ucp_datatype_iter_next_ptr(const ucp_datatype_iter_t *dt_iter,
  */
 static UCS_F_ALWAYS_INLINE void
 ucp_datatype_iter_next_iov(const ucp_datatype_iter_t *dt_iter,
-                           ucp_rsc_index_t memh_index, size_t max_length,
+                           size_t max_length, ucp_rsc_index_t memh_index,
                            ucp_datatype_iter_t *next_iter, uct_iov_t *iov)
 {
     /* TODO support IOV datatype */
@@ -299,7 +365,9 @@ ucp_datatype_iter_next_iov(const ucp_datatype_iter_t *dt_iter,
     if (memh_index == UCP_NULL_RESOURCE) {
         iov[0].memh = UCT_MEM_HANDLE_NULL;
     } else {
-        ucs_assert(memh_index < ucs_popcount(dt_iter->type.contig.reg.md_map));
+        ucs_assertv(memh_index < ucs_popcount(dt_iter->type.contig.reg.md_map),
+                    "memh_index=%d md_map=0x%" PRIx64, memh_index,
+                    dt_iter->type.contig.reg.md_map);
         iov[0].memh = dt_iter->type.contig.reg.memh[memh_index];
     }
 
@@ -325,13 +393,23 @@ void ucp_datatype_iter_copy_from_next(ucp_datatype_iter_t *dt_iter,
 }
 
 /*
+ * Check if the next iterator has reached the end
+ */
+static UCS_F_ALWAYS_INLINE int
+ucp_datatype_iter_is_next_end(const ucp_datatype_iter_t *dt_iter,
+                              const ucp_datatype_iter_t *next_iter)
+{
+    ucs_assert(dt_iter->offset <= dt_iter->length);
+    return next_iter->offset == dt_iter->length;
+}
+
+/*
  * Check if the iterator has reached the end
  */
 static UCS_F_ALWAYS_INLINE int
 ucp_datatype_iter_is_end(const ucp_datatype_iter_t *dt_iter)
 {
-    ucs_assert(dt_iter->offset <= dt_iter->length);
-    return dt_iter->offset == dt_iter->length;
+    return ucp_datatype_iter_is_next_end(dt_iter, dt_iter);
 }
 
 /*
@@ -343,6 +421,9 @@ ucp_datatype_iter_mem_reg(ucp_context_h context, ucp_datatype_iter_t *dt_iter,
 {
     /* TODO support IOV datatype */
     ucs_assert(dt_iter->dt_class == UCP_DATATYPE_CONTIG);
+    if (md_map == dt_iter->type.contig.reg.md_map) {
+        return UCS_OK;
+    }
 
     return ucp_mem_rereg_mds(context, md_map, dt_iter->type.contig.buffer,
                              dt_iter->length, uct_flags, NULL,
@@ -357,6 +438,8 @@ ucp_datatype_iter_mem_reg(ucp_context_h context, ucp_datatype_iter_t *dt_iter,
 static UCS_F_ALWAYS_INLINE void
 ucp_datatype_iter_mem_dereg(ucp_context_h context, ucp_datatype_iter_t *dt_iter)
 {
+    /* TODO support IOV datatype */
+    ucs_assert(dt_iter->dt_class == UCP_DATATYPE_CONTIG);
     ucp_mem_rereg_mds(context, 0, NULL, 0, 0, NULL,
                       (ucs_memory_type_t)dt_iter->mem_info.type, NULL,
                       dt_iter->type.contig.reg.memh,

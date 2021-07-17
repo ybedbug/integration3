@@ -39,10 +39,93 @@ static ucs_memory_type_t ucp_request_get_mem_type(ucp_request_t *req)
     }
 }
 
+static void
+ucp_request_print_send_proto(ucp_request_t *req, ucs_string_buffer_t *strb)
+{
+    const ucp_proto_config_t *proto_config = req->send.proto_config;
+    size_t length                          = req->send.state.dt_iter.length;
+    ucp_worker_h worker                    = req->send.ep->worker;
+    const ucp_proto_select_elem_t *select_elem;
+    ucp_worker_cfg_index_t new_key_cfg_index;
+    const ucp_proto_select_range_t *range;
+    ucp_proto_select_t *proto_select;
+
+    ucp_proto_select_param_str(&proto_config->select_param, strb);
+    ucs_string_buffer_appendf(strb, ": %s ", proto_config->proto->name);
+
+    proto_config->proto->config_str(length, length, proto_config->priv, strb);
+
+
+    proto_select = ucp_proto_select_get(worker, proto_config->ep_cfg_index,
+                                        proto_config->rkey_cfg_index,
+                                        &new_key_cfg_index);
+    if (proto_select == NULL) {
+        return;
+    }
+
+    // TODO maybe proto_config should save back-pointer to select_elem
+    ucs_assert(new_key_cfg_index == proto_config->rkey_cfg_index);
+    select_elem = ucp_proto_select_lookup_slow(worker, proto_select,
+                                               proto_config->ep_cfg_index,
+                                               proto_config->rkey_cfg_index,
+                                               &proto_config->select_param);
+    if (proto_select == NULL) {
+        return;
+    }
+
+    range = select_elem->perf_ranges;
+    do {
+        if (length <= range->super.max_length) {
+            double latency = ucs_linear_func_apply(
+                    range->super.perf[UCP_PROTO_PERF_TYPE_SINGLE], length);
+            double bw      = length / latency;
+            ucs_string_buffer_appendf(strb, "  %.2f MBs / %.2f us",
+                                      bw / UCS_MBYTE,
+                                      latency * UCS_USEC_PER_SEC);
+            break;
+        }
+    } while ((range++)->super.max_length < SIZE_MAX);
+}
+
+static void
+ucp_request_print_proto(ucp_request_t *req, ucs_string_buffer_t *strb)
+{
+    ucp_request_t *rndv_req;
+
+    if (req->flags & UCP_REQUEST_FLAG_SEND_TAG) {
+        ucp_request_print_send_proto(req, strb);
+    } else if (req->flags & UCP_REQUEST_FLAG_RECV_TAG) {
+        ucs_string_buffer_appendf(
+                strb, "tag_recv(length=%zu): ", req->recv.length);
+#if ENABLE_DEBUG_DATA
+        rndv_req = req->recv.rndv_req;
+#else
+        rndv_req = NULL;
+#endif
+        if (rndv_req != NULL)  {
+            ucp_request_print_send_proto(rndv_req, strb);
+        } else {
+            ucs_string_buffer_appendf(strb, "%s memory",
+                                      ucs_memory_type_names[req->recv.mem_type]);
+        }
+    } else {
+        ucs_string_buffer_appendf(strb, "<no info>");
+    }
+}
+
 static void ucp_request_print(ucs_string_buffer_t *strb, ucp_request_t *req)
 {
-    ucp_ep_h ep;
+    ucp_worker_h worker = ucs_container_of(ucs_mpool_obj_owner(req),
+                                           ucp_worker_t, req_mp);
     ucp_ep_config_t *config;
+    ucp_ep_h ep;
+
+    // TODO handle invalid request??
+    if ((req->flags & (UCP_REQUEST_FLAG_SEND_TAG | UCP_REQUEST_FLAG_RECV_TAG)) &&
+        worker->context->config.ext.proto_enable) {
+        ucp_request_print_proto(req, strb);
+        return;
+    }
 
     if (req->flags & (UCP_REQUEST_FLAG_SEND_AM | UCP_REQUEST_FLAG_SEND_TAG)) {
         ucs_string_buffer_appendf(strb, "send length %zu ", req->send.length);
@@ -217,6 +300,7 @@ ucp_worker_request_init_proxy(ucs_mpool_t *mp, void *obj, void *chunk)
     ucp_request_t *req    = obj;
 
     ucp_request_id_reset(req);
+    req->flags |= UCP_REQUEST_FLAG_IN_MPOOL;
 
     if (context->config.request.init != NULL) {
         context->config.request.init(req + 1);
@@ -271,8 +355,8 @@ int ucp_request_pending_add(ucp_request_t *req)
     }
 
     /* Unexpected error while adding to pending */
-    ucs_fatal("invalid return status from uct_ep_pending_add(): %s",
-              ucs_status_string(status));
+    ucs_fatal("invalid return status from uct_ep_pending_add(lane=%d): %s",
+              req->send.lane, ucs_status_string(status));
 }
 
 static unsigned ucp_request_dt_invalidate_progress(void *arg)

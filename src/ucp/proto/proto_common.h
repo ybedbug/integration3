@@ -13,8 +13,15 @@
 #include <uct/api/v2/uct_v2.h>
 
 
+/* Format string to display a protocol performance function */
+#define UCP_PROTO_PERF_FUNC_FMT " %.0f+%.3f*N ns, %.2f MB/s"
+#define UCP_PROTO_PERF_FUNC_ARG(_perf_func) \
+    ((_perf_func)->c * 1e9), ((_perf_func)->m * 1e9), \
+            (1.0 / ((_perf_func)->m * UCS_MBYTE))
+
+
 /* Constant for "undefined"/"not-applicable" structure offset */
-#define UCP_PROTO_COMMON_OFFSET_INVALID          PTRDIFF_MAX
+#define UCP_PROTO_COMMON_OFFSET_INVALID PTRDIFF_MAX
 
 
 typedef enum {
@@ -48,6 +55,8 @@ typedef struct {
     double                  overhead;      /* protocol overhead */
     size_t                  cfg_thresh;    /* user-configured threshold */
     unsigned                cfg_priority;  /* user configuration priority */
+    size_t                  min_length;    /* Minimal payload size */
+    size_t                  max_length;    /* Maximal payload size */
     ptrdiff_t               min_frag_offs; /* offset in uct_iface_attr_t of the
                                               minimal size of a single fragment */
     ptrdiff_t               max_frag_offs; /* offset in uct_iface_attr_t of the
@@ -132,9 +141,19 @@ void ucp_proto_common_lane_priv_str(const ucp_proto_common_lane_priv_t *lpriv,
                                     ucs_string_buffer_t *strb);
 
 
-ucp_rsc_index_t
+ucp_md_index_t
 ucp_proto_common_get_md_index(const ucp_proto_init_params_t *params,
                               ucp_lane_index_t lane);
+
+ucs_sys_device_t
+ucp_proto_common_get_sys_dev(const ucp_proto_init_params_t *params,
+                             ucp_lane_index_t lane);
+
+
+void ucp_proto_common_get_lane_distance(const ucp_proto_init_params_t *params,
+                                        ucp_lane_index_t lane,
+                                        ucs_sys_device_t sys_dev,
+                                        ucs_sys_dev_distance_t *distance);
 
 
 const uct_iface_attr_t *
@@ -204,5 +223,14 @@ void ucp_proto_request_select_error(ucp_request_t *req,
                                     size_t msg_length);
 
 void ucp_proto_request_abort(ucp_request_t *req, ucs_status_t status);
+
+
+ucs_status_t
+ucp_proto_common_buffer_copy_time(ucp_worker_h worker, const char *title,
+                                  ucs_memory_type_t local_mem_type,
+                                  ucs_memory_type_t remote_mem_type,
+                                  uct_ep_operation_t memtype_op,
+                                  ucs_linear_func_t *copy_time);
+
 
 #endif
