@@ -445,6 +445,16 @@ err:
     return status;
 }
 
+static UCS_F_ALWAYS_INLINE ucp_request_t *
+ucp_request_get_super_req(void *request, void *user_data)
+{
+    ucp_request_t UCS_V_UNUSED *req = (ucp_request_t*)request - 1;
+    ucp_request_t *super_req        = user_data;
+
+    ucs_assert(ucp_request_get_super(req) == super_req);
+    return super_req;
+}
+
 static UCS_F_ALWAYS_INLINE void
 ucp_proto_rndv_check_rkey_length(uint64_t address, size_t rkey_length,
                                  const char *title)
