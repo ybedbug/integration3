@@ -98,6 +98,19 @@ typedef void (*ucp_proto_init_cb_t)(ucp_request_t *req);
 typedef ucs_status_t (*ucp_proto_complete_cb_t)(ucp_request_t *req);
 
 
+/**
+ * Send callback for lane-map oriented protocols
+ *
+ * @param [in] req   Request to send.
+ * @param [in] lane  Endpoint lane index to send on.
+ *
+ * @return Send operation status, using same semantics as returned from UCT send
+ *         functions.
+ */
+typedef ucs_status_t (*ucp_proto_common_lane_send_func_t)(
+        ucp_request_t *req, ucp_lane_index_t lane);
+
+
 void ucp_proto_common_lane_priv_init(const ucp_proto_common_init_params_t *params,
                                      ucp_md_map_t md_map, ucp_lane_index_t lane,
                                      ucp_proto_common_lane_priv_t *lane_priv);

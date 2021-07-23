@@ -51,16 +51,14 @@ ucp_proto_single_status_handle(ucp_request_t *req,
 {
     if (ucs_likely(status == UCS_OK)) {
         if (complete_func != NULL) {
-            complete_func(req);
+            return complete_func(req);
         }
-    } else if (status == UCS_ERR_NO_RESOURCE) {
-        /* keep on pending queue */
-        req->send.lane = lane;
-        return UCS_ERR_NO_RESOURCE;
-    } else if (status != UCS_INPROGRESS) {
-        ucp_proto_request_abort(req, status);
+        return UCS_OK;
+    } else if (status == UCS_INPROGRESS) {
+        return UCS_OK;
+    } else {
+        return ucp_proto_common_handle_send_error(req, lane, status);
     }
-    return UCS_OK;
 }
 
 static UCS_F_ALWAYS_INLINE ucs_status_t

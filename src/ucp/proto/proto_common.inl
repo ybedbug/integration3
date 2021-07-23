@@ -224,4 +224,45 @@ ucp_proto_request_pack_rkey(ucp_request_t *req, void *rkey_buffer)
     return packed_rkey_size;
 }
 
+static UCS_F_ALWAYS_INLINE ucs_status_t ucp_proto_common_handle_send_error(
+        ucp_request_t *req, ucp_lane_index_t lane, ucs_status_t status)
+{
+    ucs_assert(UCS_STATUS_IS_ERR(status));
+    if (ucs_likely(status == UCS_ERR_NO_RESOURCE)) {
+        /* keep on pending queue */
+        req->send.lane = lane;
+        return UCS_ERR_NO_RESOURCE;
+    }
+
+    ucp_proto_request_abort(req, status);
+    return UCS_OK;
+}
+
+static UCS_F_ALWAYS_INLINE ucs_status_t
+ucp_proto_common_lane_map_progress(ucp_request_t *req, ucp_lane_map_t *lane_map,
+                                   ucp_proto_common_lane_send_func_t send_func)
+{
+    ucp_lane_index_t lane = ucs_ffs32(*lane_map);
+    ucs_status_t status;
+
+    ucs_assert(*lane_map != 0);
+
+    status = send_func(req, lane);
+    if (ucs_likely(status == UCS_OK)) {
+        /* fast path is OK */
+    } else if (status == UCS_INPROGRESS) {
+        ++req->send.state.uct_comp.count;
+    } else {
+        return ucp_proto_common_handle_send_error(req, lane, status);
+    }
+
+    *lane_map &= ~UCS_BIT(lane);
+    if (*lane_map != 0) {
+        return UCS_INPROGRESS; /* Not finished all lanes yet */
+    }
+
+    ucp_request_invoke_uct_completion_success(req);
+    return UCS_OK;
+}
+
 #endif
