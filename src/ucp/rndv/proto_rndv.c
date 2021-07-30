@@ -123,7 +123,7 @@ ucp_proto_rndv_ctrl_init(const ucp_proto_rndv_ctrl_init_params_t *params)
     double rts_latency;
 
     ucs_assert(params->super.flags & UCP_PROTO_COMMON_INIT_FLAG_RESPONSE);
-    ucs_assert(!(params->super.flags & UCP_PROTO_COMMON_INIT_FLAG_MAX_FRAG));
+    ucs_assert(!(params->super.flags & UCP_PROTO_COMMON_INIT_FLAG_SINGLE_FRAG));
 
     /* Find lane to send the initial message */
     rpriv->lane = ucp_proto_common_find_am_bcopy_lane(&params->super.super);
@@ -254,6 +254,7 @@ ucs_status_t ucp_proto_rndv_rts_init(const ucp_proto_init_params_t *init_params)
         .super.overhead     = 40e-9,
         .super.cfg_thresh   = context->config.ext.rndv_thresh,
         .super.cfg_priority = 60,
+        .super.memtype_op   = UCT_EP_OP_LAST,
         .super.flags        = UCP_PROTO_COMMON_INIT_FLAG_RESPONSE,
         .remote_op_id       = UCP_OP_ID_RNDV_RECV,
         .perf_bias          = context->config.ext.rndv_perf_diff / 100.0,

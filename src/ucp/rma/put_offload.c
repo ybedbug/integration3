@@ -55,12 +55,15 @@ ucp_proto_put_offload_short_init(const ucp_proto_init_params_t *init_params)
         .super.cfg_thresh    = UCS_MEMUNITS_AUTO,
         .super.cfg_priority  = 0,
         .super.min_frag_offs = UCP_PROTO_COMMON_OFFSET_INVALID,
-        .super.max_frag_offs = ucs_offsetof(uct_iface_attr_t, cap.put.max_short),
+        .super.max_frag_offs = ucs_offsetof(uct_iface_attr_t,
+                                            cap.put.max_short),
+        .super.hdr_size      = 0,
+        .super.memtype_op    = UCT_EP_OP_LAST,
         .super.flags         = UCP_PROTO_COMMON_INIT_FLAG_RECV_ZCOPY |
-                               UCP_PROTO_COMMON_INIT_FLAG_REMOTE_ACCESS,
+                               UCP_PROTO_COMMON_INIT_FLAG_REMOTE_ACCESS |
+                               UCP_PROTO_COMMON_INIT_FLAG_SINGLE_FRAG,
         .lane_type           = UCP_LANE_TYPE_RMA,
-        .tl_cap_flags        = UCT_IFACE_FLAG_PUT_SHORT,
-        .super.hdr_size      = 0
+        .tl_cap_flags        = UCT_IFACE_FLAG_PUT_SHORT
     };
 
     UCP_RMA_PROTO_INIT_CHECK(init_params, UCP_OP_ID_PUT);
@@ -137,8 +140,10 @@ ucp_proto_put_offload_bcopy_init(const ucp_proto_init_params_t *init_params)
         .super.cfg_thresh    = context->config.ext.bcopy_thresh,
         .super.cfg_priority  = 20,
         .super.min_frag_offs = UCP_PROTO_COMMON_OFFSET_INVALID,
-        .super.max_frag_offs = ucs_offsetof(uct_iface_attr_t, cap.put.max_bcopy),
+        .super.max_frag_offs = ucs_offsetof(uct_iface_attr_t,
+                                            cap.put.max_bcopy),
         .super.hdr_size      = 0,
+        .super.memtype_op    = UCT_EP_OP_LAST,
         .super.flags         = UCP_PROTO_COMMON_INIT_FLAG_RECV_ZCOPY |
                                UCP_PROTO_COMMON_INIT_FLAG_REMOTE_ACCESS,
         .max_lanes           = 1,
@@ -172,9 +177,8 @@ ucp_proto_put_offload_zcopy_send_func(ucp_request_t *req,
     uct_iov_t iov;
 
     ucp_datatype_iter_next_iov(&req->send.state.dt_iter,
-                               lpriv->super.memh_index,
                                ucp_proto_multi_max_payload(req, lpriv, 0),
-                               next_iter, &iov);
+                               lpriv->super.memh_index, next_iter, &iov);
     return uct_ep_put_zcopy(req->send.ep->uct_eps[lpriv->super.lane], &iov, 1,
                             req->send.rma.remote_addr +
                             req->send.state.dt_iter.offset,
@@ -203,9 +207,12 @@ ucp_proto_put_offload_zcopy_init(const ucp_proto_init_params_t *init_params)
         .super.overhead      = 10e-9,
         .super.cfg_thresh    = context->config.ext.zcopy_thresh,
         .super.cfg_priority  = 30,
-        .super.min_frag_offs = ucs_offsetof(uct_iface_attr_t, cap.put.min_zcopy),
-        .super.max_frag_offs = ucs_offsetof(uct_iface_attr_t, cap.put.max_zcopy),
+        .super.min_frag_offs = ucs_offsetof(uct_iface_attr_t,
+                                            cap.put.min_zcopy),
+        .super.max_frag_offs = ucs_offsetof(uct_iface_attr_t,
+                                            cap.put.max_zcopy),
         .super.hdr_size      = 0,
+        .super.memtype_op    = UCT_EP_OP_LAST,
         .super.flags         = UCP_PROTO_COMMON_INIT_FLAG_SEND_ZCOPY |
                                UCP_PROTO_COMMON_INIT_FLAG_RECV_ZCOPY |
                                UCP_PROTO_COMMON_INIT_FLAG_REMOTE_ACCESS,
