@@ -22,6 +22,7 @@ UCS_CLASS_DECLARE(uct_listener_t, uct_cm_h);
 struct uct_cm_config {
     int    allow_addr_inuse;
     double timeout;
+    int    failure; /* Level of failure reports */
 };
 
 /**
@@ -51,6 +52,7 @@ struct uct_cm {
     struct {
         int          allow_addr_inuse;
         double       timeout;
+        int          failure_level;
     } config;
 };
 

@@ -424,7 +424,8 @@ static void uct_rdmacm_cm_handle_error_event(struct rdma_cm_event *event)
     ucs_log_level_t log_level;
     ucs_status_t status;
 
-    if (event->event == RDMA_CM_EVENT_REJECTED) {
+    switch (event->event) {
+    case RDMA_CM_EVENT_REJECTED:
         if (cep->flags & UCT_RDMACM_CM_EP_ON_SERVER) {
             /* response was rejected by the client in the middle of
              * connection establishment, so report connection reset */
@@ -435,7 +436,15 @@ static void uct_rdmacm_cm_handle_error_event(struct rdma_cm_event *event)
         }
 
         log_level = UCS_LOG_LEVEL_DEBUG;
-    } else {
+        break;
+    case RDMA_CM_EVENT_UNREACHABLE:
+    case RDMA_CM_EVENT_ADDR_ERROR:
+    case RDMA_CM_EVENT_ROUTE_ERROR:
+    case RDMA_CM_EVENT_CONNECT_ERROR:
+        status    = UCS_ERR_UNREACHABLE;
+        log_level = uct_rdmacm_cm_ep_get_cm(cep)->super.config.failure_level;
+        break;
+    default:
         status    = UCS_ERR_IO_ERROR;
         log_level = UCS_LOG_LEVEL_ERROR;
     }
