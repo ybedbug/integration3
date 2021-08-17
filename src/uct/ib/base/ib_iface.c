@@ -1022,6 +1022,12 @@ UCS_CLASS_INIT_FUNC(uct_ib_iface_t, uct_ib_iface_ops_t *ops, uct_md_h md,
         goto err; 
     }
 
+    if (ib_md->devx_objs & UCS_BIT(UCT_IB_DEVX_OBJ_RCQP)) {
+        ucs_error("DEVX object 'rcqp' is not supported");
+        status = UCS_ERR_UNSUPPORTED;
+        goto err;
+    }
+
     if (!(params->open_mode & UCT_IFACE_OPEN_MODE_DEVICE)) {
         return UCS_ERR_UNSUPPORTED;
     }

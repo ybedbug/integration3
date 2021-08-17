@@ -1493,6 +1493,7 @@ ucs_status_t uct_ib_md_open(uct_component_t *component, const char *md_name,
         goto out_free_dev_list;
     }
 
+    md->devx_objs = md_config->devx_objs;
     /* cppcheck-suppress autoVariables */
     *md_p = &md->super;
     status = UCS_OK;
