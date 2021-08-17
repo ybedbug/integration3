@@ -24,6 +24,10 @@ ucs_config_field_t uct_cm_config_table[] = {
    "Timeout for RDMA address and route resolve operations",
    ucs_offsetof(uct_cm_config_t, timeout), UCS_CONFIG_TYPE_TIME},
 
+  {"FAILURE", "diag",
+   "Log level of network errors for the connection manager",
+   ucs_offsetof(uct_cm_config_t, failure), UCS_CONFIG_TYPE_ENUM(ucs_log_level_names)},
+
   {NULL}
 };
 
@@ -244,6 +248,7 @@ UCS_CLASS_INIT_FUNC(uct_cm_t, uct_cm_ops_t* ops, uct_iface_ops_t* iface_ops,
 
     self->config.allow_addr_inuse = config->allow_addr_inuse;
     self->config.timeout          = config->timeout;
+    self->config.failure_level    = config->failure;
 
     return UCS_STATS_NODE_ALLOC(&self->iface.stats, &uct_cm_stats_class,
                                 ucs_stats_get_root(), "%s-%p", "iface",
