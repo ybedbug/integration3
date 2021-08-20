@@ -69,6 +69,7 @@ typedef struct {
     size_t                   num_offcache_buffers;
     bool                     verbose;
     bool                     validate;
+    bool                     debug_timeout;
     size_t                   rndv_thresh;
 } options_t;
 
@@ -1319,7 +1320,10 @@ public:
             elapsed_time = curr_time - start_time;
             if (elapsed_time > _test_opts.client_timeout) {
                 dump_timeout_waiting_for_replies_info();
-                disconnect_uncompleted_servers("timeout for replies");
+                if (!_test_opts.debug_timeout) {
+                    // don't destroy connections, they will be debugged
+                    disconnect_uncompleted_servers("timeout for replies");
+                }
                 timer_finished = true;
             }
             check_time_limit(curr_time);
@@ -1896,10 +1900,11 @@ static int parse_args(int argc, char **argv, options_t *test_opts)
     test_opts->random_seed           = std::time(NULL) ^ getpid();
     test_opts->verbose               = false;
     test_opts->validate              = false;
+    test_opts->debug_timeout         = false;
     test_opts->rndv_thresh           = UcxContext::rndv_thresh_auto;
 
     while ((c = getopt(argc, argv,
-                       "p:c:r:d:b:i:w:a:k:o:t:n:l:s:y:vqHP:L:R:")) != -1) {
+                       "p:c:r:d:b:i:w:a:k:o:t:n:l:s:y:vqDHP:L:R:")) != -1) {
         switch (c) {
         case 'p':
             test_opts->port_num = atoi(optarg);
@@ -2011,6 +2016,9 @@ static int parse_args(int argc, char **argv, options_t *test_opts)
         case 'q':
             test_opts->validate = true;
             break;
+        case 'D':
+            test_opts->debug_timeout = true;
+            break;
         case 'H':
             UcxLog::use_human_time = true;
             break;
@@ -2052,6 +2060,7 @@ static int parse_args(int argc, char **argv, options_t *test_opts)
             std::cout << "  -s <random seed>           Random seed to use for randomizing" << std::endl;
             std::cout << "  -v                         Set verbose mode" << std::endl;
             std::cout << "  -q                         Enable data integrity and transaction check" << std::endl;
+            std::cout << "  -D                         Enable debugging mode for IO operation timeouts" << std::endl;
             std::cout << "  -H                         Use human-readable timestamps" << std::endl;
             std::cout << "  -L <logger life-time>      Set life time of logger object, if log message print takes longer, warning will be printed" << std::endl;
             std::cout << "  -P <interval>              Set report printing interval"  << std::endl;
