@@ -466,7 +466,7 @@ static unsigned ucp_worker_iface_err_handle_progress(void *arg)
         ucp_ep_invoke_err_cb(ucp_ep, key.status);
     } else {
         ucs_debug("ep %p: destroy internal endpoint due to peer failure", ucp_ep);
-        ucp_ep_disconnected(ucp_ep, 1);
+        ucp_ep_disconnected(ucp_ep, status, 1);
     }
 
     ucs_free(err_handle_arg);
@@ -1873,7 +1873,7 @@ static void ucp_worker_destroy_eps(ucp_worker_h worker)
 
     ucs_debug("worker %p: destroy all endpoints", worker);
     ucs_list_for_each_safe(ep_ext, tmp, &worker->all_eps, ep_list) {
-        ucp_ep_disconnected(ucp_ep_from_ext_gen(ep_ext), 1);
+        ucp_ep_disconnected(ucp_ep_from_ext_gen(ep_ext), UCS_ERR_CANCELED, 1);
     }
 }
 
