@@ -546,6 +546,14 @@ protected:
         send_recv_data(conn, iov, sn, XFER_TYPE_RECV, callback);
     }
 
+    void send_io_write_response(UcxConnection* conn, const BufferIov& iov,
+                                uint32_t sn)
+    {
+        // send IO write response packet only if the connection status is OK
+        send_io_message(conn, IO_WRITE_COMP, sn, iov.data_size(),
+                        opts().validate);
+    }
+
     static uint32_t get_chunk_cnt(size_t data_size, size_t chunk_size) {
         return (data_size + chunk_size - 1) / chunk_size;
     }
@@ -635,9 +643,10 @@ public:
             }
 
             if (status == UCS_OK) {
-                _server->send_io_message(_conn, IO_WRITE_COMP, _sn,
-                                         _iov->data_size(),
-                                         _server->opts().validate);
+                if (_conn->ucx_status() == UCS_OK) {
+                    _server->send_io_write_response(_conn, *_iov, _sn);
+                }
+
                 if (_server->opts().validate) {
                     validate(*_iov, _sn);
                 }
@@ -938,16 +947,13 @@ private:
 
         virtual void operator()(ucs_status_t status) {
             server_info_t &_server_info = _client._server_info[_server_index];
-            _client._num_sent -= get_num_uncompleted(_server_info);
 
+            assert(_server_info.active_index ==
+                   std::numeric_limits<size_t>::max());
+
+            _client._num_sent -= get_num_uncompleted(_server_info);
             // Remove connection pointer
             _client._server_index_lookup.erase(_server_info.conn);
-
-            // Remove active servers entry
-            if (_server_info.active_index !=
-                std::numeric_limits<size_t>::max()) {
-                _client.active_servers_remove(_server_index);
-            }
 
             reset_server_info(_server_info);
             delete this;
@@ -1091,7 +1097,8 @@ public:
         assert(_num_completed < _num_sent);
         assert(server_info.num_completed[op] < server_info.num_sent[op]);
 
-        if (get_num_uncompleted(server_info) == opts().conn_window_size) {
+        if ((get_num_uncompleted(server_info) == opts().conn_window_size) &&
+            !server_info.conn->is_disconnecting()) {
             active_servers_add(server_index);
         }
 
@@ -1288,11 +1295,20 @@ public:
         }
 
         if (!disconnecting) {
+            // remove active servers entry
+            if (server_info.active_index !=
+                std::numeric_limits<size_t>::max()) {
+                active_servers_remove(server_index);
+            }
+
             /* Destroying the connection will complete its outstanding
              * operations */
             server_info.conn->disconnect(new DisconnectCallback(*this,
                                                                 server_index));
         }
+
+        // server must be removed from the list of active servers
+        assert(server_info.active_index == std::numeric_limits<size_t>::max());
     }
 
     void wait_for_responses(long max_outstanding) {
@@ -1456,6 +1472,7 @@ public:
         size_t server_index = _active_servers[_next_active_index];
         assert(get_num_uncompleted(server_index) < opts().conn_window_size);
         assert(_server_info[server_index].conn != NULL);
+        assert(_server_info[server_index].conn->ucx_status() == UCS_OK);
 
         if (++_next_active_index == _active_servers.size()) {
             _next_active_index = 0;
@@ -1507,6 +1524,8 @@ public:
                                      _server_index_lookup.size();
             long max_outstanding   = std::min(opts().window_size,
                                               conns_window_size) - 1;
+
+            progress();
             wait_for_responses(max_outstanding);
             if (_status != OK) {
                 break;
