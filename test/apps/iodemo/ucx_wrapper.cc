@@ -958,6 +958,8 @@ bool UcxConnection::send_common(const void *buffer, size_t length, ucp_tag_t tag
                                UCP_EP_TAG_SEND_FLAG_EAGER;
     }
 
+    assert(_ucx_status == UCS_OK);
+
     ucs_status_ptr_t ptr_status = ucp_tag_send_nbx(_ep, buffer, length, tag,
                                                    &params);
     return process_request("ucp_tag_send_nb", ptr_status, callback);
