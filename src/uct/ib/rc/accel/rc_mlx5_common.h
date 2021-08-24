@@ -374,7 +374,6 @@ typedef struct uct_rc_mlx5_iface_common {
     struct {
         ucs_time_t                     time;
         unsigned                       iter_count;
-        uct_worker_cb_id_t             prog_id;
     } keepalive;
     struct {
         uct_rc_mlx5_cmd_wq_t           cmd_wq;
