@@ -22,7 +22,7 @@
 #define UCS_STRING_BUFFER_ALLOC_NAME          "string_buffer"
 
 
-static void ucs_string_buffer_reset(ucs_string_buffer_t *strb)
+static void ucs_string_buffer_zero(ucs_string_buffer_t *strb)
 {
     strb->buffer   = NULL;
     strb->length   = 0;
@@ -31,13 +31,18 @@ static void ucs_string_buffer_reset(ucs_string_buffer_t *strb)
 
 void ucs_string_buffer_init(ucs_string_buffer_t *strb)
 {
-    ucs_string_buffer_reset(strb);
+    ucs_string_buffer_zero(strb);
 }
 
 void ucs_string_buffer_cleanup(ucs_string_buffer_t *strb)
 {
     ucs_free(strb->buffer);
-    ucs_string_buffer_reset(strb);
+    ucs_string_buffer_zero(strb);
+}
+
+void ucs_string_buffer_reset(ucs_string_buffer_t *strb)
+{
+    strb->length = 0;
 }
 
 static ucs_status_t ucs_string_buffer_grow(ucs_string_buffer_t *strb,
