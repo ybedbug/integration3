@@ -59,7 +59,8 @@ public:
     static double       timeout_sec;
     static const double timeout_inf;
 
-    UcxLog(const char* prefix, bool enable = true);
+    UcxLog(const char* prefix, bool enable = true,
+           std::ostream *os = &std::cout, bool abort = false);
     ~UcxLog();
 
     template<typename T>
@@ -76,6 +77,8 @@ private:
 private:
     struct timeval           _tv;
     std::stringstream        *_ss;
+    std::ostream             *_os;
+    bool                     _abort;
 };
 
 

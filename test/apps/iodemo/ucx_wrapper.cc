@@ -48,7 +48,8 @@ bool UcxLog::use_human_time      = false;
 const double UcxLog::timeout_inf = std::numeric_limits<double>::max();
 double UcxLog::timeout_sec       = std::numeric_limits<double>::max();
 
-UcxLog::UcxLog(const char* prefix, bool enable)
+UcxLog::UcxLog(const char* prefix, bool enable, std::ostream *os, bool abort) :
+        _os(os), _abort(abort)
 {
     if (!enable) {
         memset(&_tv, 0, sizeof(_tv));
@@ -73,10 +74,12 @@ UcxLog::UcxLog(const char* prefix, bool enable)
 UcxLog::~UcxLog()
 {
     if (_ss != NULL) {
-        (*_ss) << std::endl;
-        std::cout << _ss->str();
-        check_timeout();
+        (*_os) << (*_ss).str() << std::endl;
         delete _ss;
+
+        if (_abort) {
+            abort();
+        }
     }
 }
 
