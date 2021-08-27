@@ -42,6 +42,14 @@ void ucs_string_buffer_cleanup(ucs_string_buffer_t *strb);
 
 
 /**
+ * Reset a string buffer to initial empty state.
+ *
+ * @param [out] strb   String buffer reset.
+ */
+void ucs_string_buffer_reset(ucs_string_buffer_t *strb);
+
+
+/**
  * Append a formatted string to the string buffer.
  *
  * @param [inout] strb   String buffer to append to.

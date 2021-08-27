@@ -375,7 +375,8 @@ static ucs_mpool_ops_t uct_ugni_udt_desc_mpool_ops = {
     .chunk_alloc   = ucs_mpool_hugetlb_malloc,
     .chunk_release = ucs_mpool_hugetlb_free,
     .obj_init      = NULL,
-    .obj_cleanup   = NULL
+    .obj_cleanup   = NULL,
+    .obj_str       = NULL 
 };
 
 static UCS_CLASS_INIT_FUNC(uct_ugni_udt_iface_t, uct_md_h md, uct_worker_h worker,

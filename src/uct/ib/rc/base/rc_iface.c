@@ -144,7 +144,8 @@ static ucs_mpool_ops_t uct_rc_fc_pending_mpool_ops = {
     .chunk_alloc   = ucs_mpool_chunk_malloc,
     .chunk_release = ucs_mpool_chunk_free,
     .obj_init      = NULL,
-    .obj_cleanup   = NULL
+    .obj_cleanup   = NULL,
+    .obj_str       = NULL
 };
 
 static void
@@ -162,7 +163,8 @@ static ucs_mpool_ops_t uct_rc_flush_comp_mpool_ops = {
     .chunk_alloc   = ucs_mpool_chunk_malloc,
     .chunk_release = ucs_mpool_chunk_free,
     .obj_init      = uct_rc_iface_flush_comp_init,
-    .obj_cleanup   = NULL
+    .obj_cleanup   = NULL,
+    .obj_str       = NULL
 };
 
 ucs_status_t uct_rc_iface_query(uct_rc_iface_t *iface,

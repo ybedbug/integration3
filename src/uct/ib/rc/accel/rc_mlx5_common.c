@@ -642,7 +642,8 @@ static ucs_mpool_ops_t uct_dm_iface_mpool_ops = {
     .chunk_alloc   = uct_rc_mlx5_iface_common_dm_mpool_chunk_malloc,
     .chunk_release = ucs_mpool_chunk_free,
     .obj_init      = uct_rc_mlx5_iface_common_dm_mp_obj_init,
-    .obj_cleanup   = NULL
+    .obj_cleanup   = NULL,
+    .obj_str       = NULL
 };
 
 

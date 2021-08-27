@@ -79,7 +79,8 @@ ucs_mpool_ops_t ucp_am_mpool_ops = {
     .chunk_alloc   = ucs_mpool_hugetlb_malloc,
     .chunk_release = ucs_mpool_hugetlb_free,
     .obj_init      = ucs_empty_function,
-    .obj_cleanup   = ucs_empty_function
+    .obj_cleanup   = ucs_empty_function,
+    .obj_str       = NULL
 };
 
 
@@ -87,14 +88,16 @@ ucs_mpool_ops_t ucp_reg_mpool_ops = {
     .chunk_alloc   = ucp_reg_mpool_malloc,
     .chunk_release = ucp_reg_mpool_free,
     .obj_init      = ucp_mpool_obj_init,
-    .obj_cleanup   = ucs_empty_function
+    .obj_cleanup   = ucs_empty_function,
+    .obj_str       = NULL
 };
 
 ucs_mpool_ops_t ucp_frag_mpool_ops = {
     .chunk_alloc   = ucp_frag_mpool_malloc,
     .chunk_release = ucp_frag_mpool_free,
     .obj_init      = ucp_mpool_obj_init,
-    .obj_cleanup   = ucs_empty_function
+    .obj_cleanup   = ucs_empty_function,
+    .obj_str       = NULL
 };
 
 
@@ -1651,7 +1654,8 @@ static ucs_mpool_ops_t ucp_rkey_mpool_ops = {
     .chunk_alloc   = ucs_mpool_chunk_malloc,
     .chunk_release = ucs_mpool_chunk_free,
     .obj_init      = NULL,
-    .obj_cleanup   = NULL
+    .obj_cleanup   = NULL,
+    .obj_str       = NULL
 };
 
 ucs_status_t ucp_worker_create(ucp_context_h context,

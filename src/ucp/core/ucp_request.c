@@ -20,6 +20,63 @@
 #include <ucs/debug/log.h>
 
 
+static ucs_memory_type_t ucp_request_get_mem_type(ucp_request_t *req)
+{
+    if (req->flags & (UCP_REQUEST_FLAG_SEND_AM | UCP_REQUEST_FLAG_SEND_TAG)) {
+        return req->recv.mem_type;
+    } else {
+        return UCS_MEMORY_TYPE_LAST;
+    }
+}
+
+static void
+ucp_request_str(ucp_request_t *req, ucs_string_buffer_t *strb, int recurse)
+{
+    char lane_info[128] = {0};
+    const char *progress_func_name;
+    const char *comp_func_name;
+    ucp_ep_config_t *config;
+    ucp_ep_h ep;
+
+    ucs_string_buffer_appendf(strb, "flags:%x ", req->flags);
+
+    if (req->flags & (UCP_REQUEST_FLAG_SEND_AM | UCP_REQUEST_FLAG_SEND_TAG)) {
+        ucs_string_buffer_appendf(strb, "send length %zu ", req->send.length);
+
+        progress_func_name = ucs_debug_get_symbol_name(req->send.uct.func);
+        ucs_string_buffer_appendf(strb, "%s() ", progress_func_name);
+
+        if (req->flags & UCP_REQUEST_FLAG_CALLBACK) {
+            comp_func_name = ucs_debug_get_symbol_name(req->send.cb);
+            ucs_string_buffer_appendf(strb, "comp:%s()", comp_func_name);
+        }
+
+        if (recurse) {
+            ep     = req->send.ep;
+            config = ucp_ep_config(ep);
+            ucp_ep_config_lane_info_str(ep->worker->context, &config->key, NULL,
+                                        req->send.lane, UCP_NULL_RESOURCE,
+                                        lane_info, sizeof(lane_info));
+        }
+    } else if (req->flags & UCP_REQUEST_FLAG_RECV) {
+        ucs_string_buffer_appendf(strb, "recv length %zu ", req->recv.length);
+    } else {
+        ucs_string_buffer_appendf(strb, "no debug info ");
+    }
+
+    ucs_string_buffer_appendf(
+            strb, "%s memory",
+            ucs_memory_type_names[ucp_request_get_mem_type(req)]);
+}
+
+static void
+ucp_request_mpool_obj_str(ucs_mpool_t *mp, void *obj, ucs_string_buffer_t *strb)
+{
+    ucp_request_t *req = obj;
+
+    ucp_request_str(req, strb, 0);
+}
+
 int ucp_request_is_completed(void *request)
 {
     ucp_request_t *req = (ucp_request_t*)request - 1;
@@ -165,14 +222,16 @@ ucs_mpool_ops_t ucp_request_mpool_ops = {
     .chunk_alloc   = ucs_mpool_hugetlb_malloc,
     .chunk_release = ucs_mpool_hugetlb_free,
     .obj_init      = ucp_worker_request_init_proxy,
-    .obj_cleanup   = ucp_worker_request_fini_proxy
+    .obj_cleanup   = ucp_worker_request_fini_proxy,
+    .obj_str       = ucp_request_mpool_obj_str
 };
 
 ucs_mpool_ops_t ucp_rndv_get_mpool_ops = {
     .chunk_alloc   = ucs_mpool_chunk_malloc,
     .chunk_release = ucs_mpool_chunk_free,
     .obj_init      = NULL,
-    .obj_cleanup   = NULL
+    .obj_cleanup   = NULL,
+    .obj_str       = NULL
 };
 
 int ucp_request_pending_add(ucp_request_t *req, ucs_status_t *req_status,
