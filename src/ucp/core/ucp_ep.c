@@ -916,7 +916,7 @@ static int ucp_ep_flush_resume_remove_filter(const ucs_callbackq_elem_t *elem,
 }
 
 /* Must be called with async lock held */
-void ucp_ep_disconnected(ucp_ep_h ep, int force)
+void ucp_ep_disconnected(ucp_ep_h ep, ucs_status_t status, int force)
 {
     /* remove pending slow-path progress in case it wasn't removed yet */
     ucs_callbackq_remove_if(&ep->worker->uct->progress_q,
@@ -932,7 +932,7 @@ void ucp_ep_disconnected(ucp_ep_h ep, int force)
 
     ucp_ep_cm_slow_cbq_cleanup(ep);
 
-    ucp_stream_ep_cleanup(ep);
+    ucp_stream_ep_cleanup(ep, status);
     ucp_am_ep_cleanup(ep);
     ucp_ep_cleanup_unexp(ep);
     ucp_ep_complete_rndv_reqs(ep);
@@ -964,7 +964,8 @@ unsigned ucp_ep_local_disconnect_progress(void *arg)
     UCS_ASYNC_BLOCK(async);
     ucs_debug("ep %p: disconnected with request %p, %s", ep, req,
               ucs_status_string(req->status));
-    ucp_ep_disconnected(ep, req->send.flush.uct_flags & UCT_FLUSH_FLAG_CANCEL);
+    ucp_ep_disconnected(ep, req->status,
+                        req->send.flush.uct_flags & UCT_FLUSH_FLAG_CANCEL);
     UCS_ASYNC_UNBLOCK(async);
 
     /* Complete send request from here, to avoid releasing the request while
@@ -1081,7 +1082,8 @@ ucs_status_ptr_t ucp_ep_close_nb(ucp_ep_h ep, unsigned mode)
                 request = UCS_STATUS_PTR(UCS_ERR_NO_MEMORY);
             }
         } else {
-            ucp_ep_disconnected(ep, mode == UCP_EP_CLOSE_MODE_FORCE);
+            ucp_ep_disconnected(ep, UCS_ERR_CANCELED,
+                                mode == UCP_EP_CLOSE_MODE_FORCE);
         }
     }
 

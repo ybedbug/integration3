@@ -296,7 +296,7 @@ typedef struct ucp_ep_config {
          * (currently it's only AM based). */
         const ucp_request_send_proto_t   *proto;
     } stream;
-    
+
     struct {
         /* Protocols used for am operations */
         const ucp_request_send_proto_t   *proto;
@@ -476,7 +476,7 @@ void ucp_ep_config_key_set_err_mode(ucp_ep_config_key_t *key,
 
 void ucp_ep_err_pending_purge(uct_pending_req_t *self, void *arg);
 
-void ucp_ep_disconnected(ucp_ep_h ep, int force);
+void ucp_ep_disconnected(ucp_ep_h ep, ucs_status_t status, int force);
 
 void ucp_ep_destroy_internal(ucp_ep_h ep);
 
