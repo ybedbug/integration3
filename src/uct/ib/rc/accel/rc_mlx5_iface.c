@@ -173,6 +173,10 @@ uct_rc_mlx5_common_ka_progress(uct_rc_mlx5_iface_common_t *iface)
 
     ucs_spin_lock(&iface->super.ep_list_lock);
     ucs_list_for_each(ep, &iface->super.ep_list, super.list) {
+        if (ep->super.txqp.available < ep->tx.wq.bb_max) {
+            /* have outstanding operations */
+            continue;
+        }
         ucs_trace("send keepalive grant on ep %p", ep);
         uct_rc_ep_fc_send_grant(&ep->super);
     }
