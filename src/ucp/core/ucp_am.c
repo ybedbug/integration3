@@ -407,7 +407,7 @@ ucp_am_send_req(ucp_request_t *req, size_t count,
     return req + 1;
 }
 
-UCS_PROFILE_FUNC(ucs_status_ptr_t, ucp_am_send_nb, 
+UCS_PROFILE_FUNC(ucs_status_ptr_t, ucp_am_send_nb,
                  (ep, id, payload, count, datatype, cb, flags),
                  ucp_ep_h ep, uint16_t id, const void *payload, 
                  size_t count, uintptr_t datatype, 
@@ -441,7 +441,7 @@ UCS_PROFILE_FUNC(ucs_status_ptr_t, ucp_am_send_nb,
         }
     }
 
-    req = ucp_request_get(ep->worker);
+    req = ucp_request_get(ep->worker, "am_send_nb");
     if (ucs_unlikely(req == NULL)) {
         ret = UCS_STATUS_PTR(UCS_ERR_NO_MEMORY);
         goto out;

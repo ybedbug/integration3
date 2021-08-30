@@ -280,7 +280,7 @@ UCS_PROFILE_FUNC(ucs_status_ptr_t, ucp_tag_send_sync_nb,
         goto out;
     }
 
-    req = ucp_request_get(ep->worker);
+    req = ucp_request_get(ep->worker, "tag_send_sync_nb");
     if (req == NULL) {
         ret = UCS_STATUS_PTR(UCS_ERR_NO_MEMORY);
         goto out;
@@ -358,7 +358,7 @@ UCS_PROFILE_FUNC(ucs_status_ptr_t, ucp_tag_send_nbx,
     }
 
     worker = ep->worker;
-    req = ucp_request_get_param(worker, param,
+    req = ucp_request_get_param(worker, param, "tag_send_nbx",
                                 {
                                     ret = UCS_STATUS_PTR(UCS_ERR_NO_MEMORY);
                                     goto out;

@@ -47,7 +47,7 @@
 
 
 /* defined as a macro to print the call site */
-#define ucp_request_get(_worker) \
+#define ucp_request_get(_worker, _name) \
     ({ \
         ucp_request_t *_req = ucs_mpool_get_inline(&(_worker)->req_mp); \
         if (_req != NULL) { \
@@ -56,6 +56,7 @@
             ucs_trace_req("allocated request %p", _req); \
             UCS_PROFILE_REQUEST_NEW(_req, "ucp_request", 0); \
         } \
+        ucp_request_set_name(_req, _name); \
         _req; \
     })
 
@@ -86,11 +87,11 @@
     }
 
 
-#define ucp_request_get_param(_worker, _param, _failed) \
+#define ucp_request_get_param(_worker, _param, _name, _failed) \
     ({ \
         ucp_request_t *__req; \
         if (!((_param)->op_attr_mask & UCP_OP_ATTR_FIELD_REQUEST)) { \
-            __req = ucp_request_get(_worker); \
+            __req = ucp_request_get(_worker, _name); \
             if (ucs_unlikely((__req) == NULL)) { \
                 _failed; \
             } \
@@ -642,6 +643,14 @@ ucp_request_param_flags(const ucp_request_param_t *param)
 {
     return (param->op_attr_mask & UCP_OP_ATTR_FIELD_FLAGS) ?
            param->flags : 0;
+}
+
+static UCS_F_ALWAYS_INLINE void
+ucp_request_set_name(ucp_request_t *req, const char *name)
+{
+#if ENABLE_DEBUG_DATA
+    req->name = name;
+#endif
 }
 
 #endif

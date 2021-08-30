@@ -140,7 +140,7 @@ ucs_status_ptr_t ucp_atomic_fetch_nb(ucp_ep_h ep, ucp_atomic_fetch_op_t opcode,
         goto out;
     }
 
-    req = ucp_request_get(ep->worker);
+    req = ucp_request_get(ep->worker, "atomic_fetch_nb");
     if (ucs_unlikely(NULL == req)) {
         status_p = UCS_STATUS_PTR(UCS_ERR_NO_MEMORY);
         goto out;
@@ -177,7 +177,7 @@ ucs_status_t ucp_atomic_post(ucp_ep_h ep, ucp_atomic_post_op_t opcode, uint64_t 
         goto out;
     }
 
-    req = ucp_request_get(ep->worker);
+    req = ucp_request_get(ep->worker, "atomic_post");
     if (ucs_unlikely(NULL == req)) {
         status = UCS_ERR_NO_MEMORY;
         goto out;

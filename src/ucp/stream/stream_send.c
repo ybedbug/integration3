@@ -123,7 +123,7 @@ UCS_PROFILE_FUNC(ucs_status_ptr_t, ucp_stream_send_nb,
         }
     }
 
-    req = ucp_request_get(ep->worker);
+    req = ucp_request_get(ep->worker, "stream_send_nb");
     if (ucs_unlikely(req == NULL)) {
         ret = UCS_STATUS_PTR(UCS_ERR_NO_MEMORY);
         goto out;

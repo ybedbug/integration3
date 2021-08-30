@@ -157,7 +157,7 @@ ucp_rma_nonblocking(ucp_ep_h ep, const void *buffer, size_t length,
     ucs_status_t status;
     ucp_request_t *req;
 
-    req = ucp_request_get(ep->worker);
+    req = ucp_request_get(ep->worker, "rma_nonblocking");
     if (req == NULL) {
         return UCS_ERR_NO_MEMORY;
     }
@@ -181,7 +181,7 @@ ucp_rma_nonblocking_cb(ucp_ep_h ep, const void *buffer, size_t length,
     ucs_status_t status;
     ucp_request_t *req;
 
-    req = ucp_request_get(ep->worker);
+    req = ucp_request_get(ep->worker, "rma_nonblocking_cb");
     if (req == NULL) {
         return UCS_STATUS_PTR(UCS_ERR_NO_MEMORY);
     }

@@ -1067,14 +1067,15 @@ ucs_status_ptr_t ucp_ep_close_nb(ucp_ep_h ep, unsigned mode)
                                     (mode == UCP_EP_CLOSE_MODE_FLUSH) ?
                                     UCT_FLUSH_FLAG_LOCAL : UCT_FLUSH_FLAG_CANCEL,
                                     NULL, 0, NULL,
-                                    ucp_ep_close_flushed_callback, "close");
+                                    ucp_ep_close_flushed_callback,
+                                    "flush close");
 
     if (!UCS_PTR_IS_PTR(request)) {
         if (ucp_ep_is_cm_local_connected(ep) &&
             (mode == UCP_EP_CLOSE_MODE_FLUSH)) {
             /* lanes already flushed, start disconnect on CM lane */
             ucp_ep_cm_disconnect_cm_lane(ep);
-            close_req = ucp_ep_cm_close_request_get(ep);
+            close_req = ucp_ep_cm_close_request_get(ep, "ep_close_nb");
             if (close_req != NULL) {
                 request = close_req + 1;
                 ucp_ep_set_close_request(ep, close_req, "close");

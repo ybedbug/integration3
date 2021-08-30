@@ -233,7 +233,7 @@ UCS_PROFILE_FUNC(ucs_status_ptr_t, ucp_tag_recv_nb,
                                     return UCS_STATUS_PTR(UCS_ERR_INVALID_PARAM));
     UCP_WORKER_THREAD_CS_ENTER_CONDITIONAL(worker);
 
-    req = ucp_request_get(worker);
+    req = ucp_request_get(worker, "tag_recv_nb");
     if (ucs_likely(req != NULL)) {
         rdesc = ucp_tag_unexp_search(&worker->tm, tag, tag_mask, 1, "recv_nb");
         ucp_tag_recv_common(worker, buffer, count, datatype, tag, tag_mask, req,
@@ -261,7 +261,7 @@ UCS_PROFILE_FUNC(ucs_status_ptr_t, ucp_tag_msg_recv_nb,
                                     return UCS_STATUS_PTR(UCS_ERR_INVALID_PARAM));
     UCP_WORKER_THREAD_CS_ENTER_CONDITIONAL(worker);
 
-    req = ucp_request_get(worker);
+    req = ucp_request_get(worker, "tag_msg_recv_nb");
     if (ucs_likely(req != NULL)) {
         ucp_tag_recv_common(worker, buffer, count, datatype,
                             ucp_rdesc_get_tag(rdesc), UCP_TAG_MASK_FULL, req,

@@ -291,7 +291,7 @@ ucs_status_ptr_t ucp_ep_flush_internal(ucp_ep_h ep, unsigned uct_flags,
 
     ucs_debug("%s ep %p", debug_name, ep);
 
-    req = ucp_request_get(ep->worker);
+    req = ucp_request_get(ep->worker, debug_name);
     if (req == NULL) {
         return UCS_STATUS_PTR(UCS_ERR_NO_MEMORY);
     }
@@ -304,7 +304,7 @@ ucs_status_ptr_t ucp_ep_flush_internal(ucp_ep_h ep, unsigned uct_flags,
      * flushed. req->send.flush.lanes keeps track of which lanes we still have
      * to start flush on.
       */
-    req->flags                    = req_flags;
+    req->flags                    = req_flags | UCP_REQUEST_FLAG_FLUSH;
     req->status                   = UCS_OK;
     req->send.ep                  = ep;
     req->send.cb                  = (ucp_send_nbx_callback_t)req_cb;
@@ -472,7 +472,7 @@ static ucs_status_ptr_t ucp_worker_flush_nb_internal(ucp_worker_h worker,
         return UCS_STATUS_PTR(status);
     }
 
-    req = ucp_request_get(worker);
+    req = ucp_request_get(worker, "worker_flush_nb_internal");
     if (req == NULL) {
         return UCS_STATUS_PTR(UCS_ERR_NO_MEMORY);
     }

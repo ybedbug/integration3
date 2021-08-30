@@ -472,7 +472,7 @@ ucp_proto_ssend_ack_request_alloc(ucp_worker_h worker, uintptr_t ep_ptr)
 {
     ucp_request_t *req;
 
-    req = ucp_request_get(worker);
+    req = ucp_request_get(worker, "ssend_ack");
     if (req == NULL) {
         ucs_error("could not allocate request");
         return NULL;

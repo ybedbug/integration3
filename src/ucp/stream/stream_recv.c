@@ -292,7 +292,7 @@ UCS_PROFILE_FUNC(ucs_status_ptr_t, ucp_stream_recv_nb,
         dt_length = 0; /* Suppress warnings of paranoid compilers */
     }
 
-    req = ucp_request_get(ep->worker);
+    req = ucp_request_get(ep->worker, "stream_recv_nb");
     if (ucs_unlikely(req == NULL)) {
         status = UCS_ERR_NO_MEMORY;
         goto out_status;
