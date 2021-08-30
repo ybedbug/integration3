@@ -374,7 +374,7 @@ ucs_status_t ucp_do_am_zcopy_multi(uct_pending_req_t *self, uint8_t am_id_first,
                                                status);
                 if (!UCS_STATUS_IS_ERR(status)) {
                     if (enable_am_bw) {
-                        ucp_send_request_next_am_bw_lane(req, state.offset > 0);
+                        ucp_send_request_next_am_bw_lane(req, offset > 0);
                     }
                     return UCS_OK;
                 }
@@ -404,7 +404,7 @@ ucs_status_t ucp_do_am_zcopy_multi(uct_pending_req_t *self, uint8_t am_id_first,
             return UCS_OK;
         } else {
             if (enable_am_bw) {
-                ucp_send_request_next_am_bw_lane(req, state.offset > 0);
+                ucp_send_request_next_am_bw_lane(req, offset > 0);
             }
             return UCS_INPROGRESS;
         }
