@@ -987,9 +987,9 @@ void ucp_ep_cm_disconnect_cm_lane(ucp_ep_h ucp_ep)
     }
 }
 
-ucp_request_t* ucp_ep_cm_close_request_get(ucp_ep_h ep)
+ucp_request_t* ucp_ep_cm_close_request_get(ucp_ep_h ep, const char *name)
 {
-    ucp_request_t *request = ucp_request_get(ep->worker);
+    ucp_request_t *request = ucp_request_get(ep->worker, name);
 
     if (request == NULL) {
         ucs_error("failed to allocate close request for ep %p", ep);

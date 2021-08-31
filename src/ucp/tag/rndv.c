@@ -909,13 +909,13 @@ static void ucp_rndv_send_frag_rtr(ucp_worker_h worker, ucp_request_t *rndv_req,
 
         /* internal fragment recv request allocated on receiver side to receive
          *  put fragment from sender and to perform a put to recv buffer */
-        freq = ucp_request_get(worker);
+        freq = ucp_request_get(worker, "rndv_send_frag_rtr fragment");
         if (freq == NULL) {
             ucs_fatal("failed to allocate fragment receive request");
         }
 
         /* internal rndv request to send RTR */
-        frndv_req = ucp_request_get(worker);
+        frndv_req = ucp_request_get(worker, "rndv_send_frag_rtr RTR");
         if (frndv_req == NULL) {
             ucs_fatal("failed to allocate fragment rendezvous reply");
         }
@@ -1120,7 +1120,7 @@ UCS_PROFILE_FUNC_VOID(ucp_rndv_matched, (worker, rreq, rndv_rts_hdr, rts_seq),
 
     /* the internal send request allocated on receiver side (to perform a "get"
      * operation, send "ATS" and "RTR") */
-    rndv_req = ucp_request_get(worker);
+    rndv_req = ucp_request_get(worker, "rndv_matched");
     if (rndv_req == NULL) {
         ucs_error("failed to allocate rendezvous reply");
         goto out;
@@ -1211,7 +1211,7 @@ static void ucp_rndv_send_cancel_ack(ucp_worker_h worker,
 {
     ucp_request_t *req;
 
-    req = ucp_request_get(worker);
+    req = ucp_request_get(worker, "rndv_send_cancel_ack");
     if (req == NULL) {
         return;
     }
@@ -1625,7 +1625,7 @@ static ucs_status_t ucp_rndv_pipeline(ucp_request_t *sreq,
     }
 
     /* internal send request allocated on sender side to handle send fragments for RTR */
-    fsreq = ucp_request_get(worker);
+    fsreq = ucp_request_get(worker, "rndv_pipeline send fragment");
     if (fsreq == NULL) {
         ucs_fatal("failed to allocate fragment receive request");
     }
@@ -1648,8 +1648,8 @@ static ucs_status_t ucp_rndv_pipeline(ucp_request_t *sreq,
         length = (i == (num_frags - 1)) ? (rndv_size - offset) : max_frag_size;
 
         /* internal fragment send request allocated on sender side to receive
-         *  mem type fragment stage to host and to perform a put to receiver */
-        freq = ucp_request_get(worker);
+         * mem type fragment stage to host and to perform a put to receiver */
+        freq = ucp_request_get(worker, "rndv_pipeline internal fragment");
         if (freq == NULL) {
             ucs_fatal("failed to allocate fragment receive request");
         }

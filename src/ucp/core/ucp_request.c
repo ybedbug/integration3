@@ -38,18 +38,18 @@ ucp_request_str(ucp_request_t *req, ucs_string_buffer_t *strb, int recurse)
     ucp_ep_config_t *config;
     ucp_ep_h ep;
 
-    ucs_string_buffer_appendf(strb, "flags:%x ", req->flags);
+    ucs_string_buffer_appendf(strb, "flags %x ", req->flags);
+
+    if (req->flags & UCP_REQUEST_FLAG_CALLBACK) {
+        comp_func_name = ucs_debug_get_symbol_name(req->send.cb);
+        ucs_string_buffer_appendf(strb, "comp %s() ", comp_func_name);
+    }
 
     if (req->flags & (UCP_REQUEST_FLAG_SEND_AM | UCP_REQUEST_FLAG_SEND_TAG)) {
         ucs_string_buffer_appendf(strb, "send length %zu ", req->send.length);
 
         progress_func_name = ucs_debug_get_symbol_name(req->send.uct.func);
-        ucs_string_buffer_appendf(strb, "%s() ", progress_func_name);
-
-        if (req->flags & UCP_REQUEST_FLAG_CALLBACK) {
-            comp_func_name = ucs_debug_get_symbol_name(req->send.cb);
-            ucs_string_buffer_appendf(strb, "comp:%s()", comp_func_name);
-        }
+        ucs_string_buffer_appendf(strb, "uct %s() ", progress_func_name);
 
         if (recurse) {
             ep     = req->send.ep;
@@ -60,13 +60,21 @@ ucp_request_str(ucp_request_t *req, ucs_string_buffer_t *strb, int recurse)
         }
     } else if (req->flags & UCP_REQUEST_FLAG_RECV) {
         ucs_string_buffer_appendf(strb, "recv length %zu ", req->recv.length);
+    } else if (req->flags & UCP_REQUEST_FLAG_FLUSH) {
+        ucs_string_buffer_appendf(strb, "flush ep %p ", req->send.ep);
+        progress_func_name = ucs_debug_get_symbol_name(req->send.uct.func);
+        ucs_string_buffer_appendf(strb, "uct %s() ", progress_func_name);
     } else {
         ucs_string_buffer_appendf(strb, "no debug info ");
     }
 
     ucs_string_buffer_appendf(
-            strb, "%s memory",
+            strb, "memory %s",
             ucs_memory_type_names[ucp_request_get_mem_type(req)]);
+
+#if ENABLE_DEBUG_DATA
+    ucs_string_buffer_appendf(strb, "name %s", req->name);
+#endif
 }
 
 static void

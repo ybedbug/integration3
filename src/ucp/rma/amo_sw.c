@@ -235,7 +235,7 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_atomic_req_handler, (arg, data, length, am_fl
         ucp_rma_sw_send_cmpl(ep);
     } else {
         /* atomic operation with result */
-        req = ucp_request_get(worker);
+        req = ucp_request_get(worker, "atomic_req_handler");
         if (req == NULL) {
             ucs_error("failed to allocate atomic reply");
             return UCS_OK;

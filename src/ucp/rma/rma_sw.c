@@ -132,7 +132,7 @@ void ucp_rma_sw_send_cmpl(ucp_ep_h ep)
 {
     ucp_request_t *req;
 
-    req = ucp_request_get(ep->worker);
+    req = ucp_request_get(ep->worker, "rma_sw_send_cmpl");
     if (req == NULL) {
         ucs_error("failed to allocate put completion");
         return;
@@ -231,7 +231,7 @@ UCS_PROFILE_FUNC(ucs_status_t, ucp_get_req_handler, (arg, data, length, am_flags
         return UCS_ERR_NO_ELEM;
     }
 
-    req = ucp_request_get(worker);
+    req = ucp_request_get(worker, "get_req_handler");
     if (req == NULL) {
         ucs_error("failed to allocate get reply");
         return UCS_OK;

@@ -48,6 +48,7 @@ enum {
     UCP_REQUEST_FLAG_RNDV_RTS_SENT        = UCS_BIT(16),
     UCP_REQUEST_FLAG_CANCELED             = UCS_BIT(17),
     UCP_REQUEST_FLAG_RNDV_MATCHED         = UCS_BIT(18),
+    UCP_REQUEST_FLAG_FLUSH                = UCS_BIT(19),
 #if UCS_ENABLE_ASSERT
     UCP_REQUEST_FLAG_STREAM_RECV          = UCS_BIT(29),
     UCP_REQUEST_DEBUG_FLAG_EXTERNAL       = UCS_BIT(30),
@@ -320,6 +321,9 @@ struct ucp_request {
             ucp_ep_ext_gen_t      *next_ep; /* Next endpoint to flush */
         } flush_worker;
     };
+#if ENABLE_DEBUG_DATA
+    const char *name;
+#endif
 };
 
 
