@@ -69,7 +69,7 @@ ucp_request_str(ucp_request_t *req, ucs_string_buffer_t *strb, int recurse)
     }
 
     ucs_string_buffer_appendf(
-            strb, "memory %s",
+            strb, "memory %s ",
             ucs_memory_type_names[ucp_request_get_mem_type(req)]);
 
 #if ENABLE_DEBUG_DATA
