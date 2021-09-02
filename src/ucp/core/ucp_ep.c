@@ -1063,9 +1063,7 @@ ucs_status_ptr_t ucp_ep_close_nb(ucp_ep_h ep, unsigned mode)
     UCS_ASYNC_BLOCK(&worker->async);
 
     ep->flags |= UCP_EP_FLAG_CLOSED;
-    request = ucp_ep_flush_internal(ep,
-                                    (mode == UCP_EP_CLOSE_MODE_FLUSH) ?
-                                    UCT_FLUSH_FLAG_LOCAL : UCT_FLUSH_FLAG_CANCEL,
+    request = ucp_ep_flush_internal(ep, UCT_FLUSH_FLAG_CANCEL,
                                     NULL, 0, NULL,
                                     ucp_ep_close_flushed_callback,
                                     "flush close");
@@ -1083,8 +1081,7 @@ ucs_status_ptr_t ucp_ep_close_nb(ucp_ep_h ep, unsigned mode)
                 request = UCS_STATUS_PTR(UCS_ERR_NO_MEMORY);
             }
         } else {
-            ucp_ep_disconnected(ep, UCS_ERR_CANCELED,
-                                mode == UCP_EP_CLOSE_MODE_FORCE);
+            ucp_ep_disconnected(ep, UCS_ERR_CANCELED, 1);
         }
     }
 
