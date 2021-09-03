@@ -423,95 +423,6 @@ err_out:
                              ucp_ep_get_cm_lane(ucp_ep), status);
 }
 
-/*
- * Internal flush completion callback which is a part of close protocol,
- * this flush was initiated by remote peer in disconnect callback on CM lane.
- */
-static void ucp_ep_cm_disconnect_flushed_cb(ucp_request_t *req)
-{
-    ucp_ep_h ucp_ep            = req->send.ep;
-    /* the EP can be closed/destroyed from err callback */
-    ucs_async_context_t *async = &ucp_ep->worker->async;
-
-    UCS_ASYNC_BLOCK(async);
-    if (req->status == UCS_OK) {
-        ucs_assert(ucp_ep_is_cm_local_connected(ucp_ep));
-        ucp_ep_cm_disconnect_cm_lane(ucp_ep);
-    } else if (ucp_ep->flags & UCP_EP_FLAG_FAILED) {
-        ucs_assert(!ucp_ep_is_cm_local_connected(ucp_ep));
-    } else {
-        /* 1) ucp_ep_close(force) is called from err callback which was invoked
-              on remote connection reset
-              TODO: remove this case when IB flush cancel is fixed (#4743),
-                    moving QP to err state should move UCP EP to error state,
-                    then ucp_worker_set_ep_failed disconnects CM lane
-           2) transport level error is possible in case of > 1 lane
-         */
-        ucs_assert((req->status == UCS_ERR_CANCELED) ||
-                   (req->status == UCS_ERR_ENDPOINT_TIMEOUT));
-    }
-
-    ucs_assert(!(req->flags & UCP_REQUEST_FLAG_CALLBACK));
-    ucp_request_put(req);
-    UCS_ASYNC_UNBLOCK(async);
-}
-
-static unsigned ucp_ep_cm_remote_disconnect_progress(void *arg)
-{
-    ucp_ep_h ucp_ep = arg;
-    void *req;
-    ucs_status_t status;
-
-    ucs_trace("ep %p: flags %xu cm_remote_disconnect_progress", ucp_ep,
-              ucp_ep->flags);
-
-    ucs_assert(ucp_ep_get_cm_uct_ep(ucp_ep) != NULL);
-
-    ucs_assert(ucp_ep->flags & UCP_EP_FLAG_LOCAL_CONNECTED);
-    if (ucs_test_all_flags(ucp_ep->flags, UCP_EP_FLAG_CLOSED |
-                                          UCP_EP_FLAG_CLOSE_REQ_VALID)) {
-        ucp_request_complete_send(ucp_ep_ext_gen(ucp_ep)->close_req.req, UCS_OK);
-        return 1;
-    }
-
-    if (ucp_ep->flags & UCP_EP_FLAG_CLOSED) {
-        /* the ep is closed by API but close req is not valid yet (checked
-         * above), it will be set later from scheduled
-         * @ref ucp_ep_close_flushed_callback */
-        ucs_debug("ep %p: ep closed but request is not set, waiting for the flush callback",
-                  ucp_ep);
-        return 1;
-    }
-
-    /*
-     * TODO: set the ucp_ep to error state to prevent user from sending more
-     *       ops.
-     */
-    ucs_assert(ucp_ep->flags & UCP_EP_FLAG_FLUSH_STATE_VALID);
-    ucs_assert(!(ucp_ep->flags & UCP_EP_FLAG_CLOSED));
-    req = ucp_ep_flush_internal(ucp_ep, UCT_FLUSH_FLAG_LOCAL, NULL, 0, NULL,
-                                ucp_ep_cm_disconnect_flushed_cb,
-                                "cm_disconnected_cb");
-    if (req == NULL) {
-        /* flush is successfully completed in place, notify remote peer
-         * that we are disconnected, the EP will be destroyed from API call */
-        ucp_ep_cm_disconnect_cm_lane(ucp_ep);
-    } else if (UCS_PTR_IS_ERR(req)) {
-        status = UCS_PTR_STATUS(req);
-        ucs_error("ucp_ep_flush_internal completed with error: %s",
-                  ucs_status_string(status));
-        goto err;
-    }
-
-    return 1;
-
-err:
-    ucp_worker_set_ep_failed(ucp_ep->worker, ucp_ep,
-                             ucp_ep_get_cm_uct_ep(ucp_ep),
-                             ucp_ep_get_cm_lane(ucp_ep), status);
-    return 1;
-}
-
 static unsigned ucp_ep_cm_disconnect_progress(void *arg)
 {
     ucp_ep_h ucp_ep            = arg;
@@ -534,7 +445,6 @@ static unsigned ucp_ep_cm_disconnect_progress(void *arg)
         ucs_assert(!(ucp_ep->flags & UCP_EP_FLAG_CLOSE_REQ_VALID));
     } else if (ucp_ep->flags & UCP_EP_FLAG_LOCAL_CONNECTED) {
         /* if the EP is local connected, need to flush it from main thread first */
-        ucp_ep_cm_remote_disconnect_progress(ucp_ep);
         ucp_ep_invoke_err_cb(ucp_ep, UCS_ERR_CONNECTION_RESET);
     } else if (ucp_ep->flags & UCP_EP_FLAG_CLOSE_REQ_VALID) {
         /* if the EP is not local connected, the EP has been closed and flushed,
