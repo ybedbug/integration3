@@ -294,6 +294,9 @@ struct uct_rc_iface_send_op {
                                                   get_bcopy completions */
     };
     uct_completion_t              *user_comp;
+#if ENABLE_DEBUG_DATA
+    const char                    *name;       /* object ID, debug only */
+#endif
 };
 
 
@@ -473,4 +476,13 @@ uct_rc_iface_atomic_handler(uct_rc_iface_t *iface, int ext, unsigned length)
     }
     return NULL;
 }
+
+static UCS_F_ALWAYS_INLINE void
+uct_rc_iface_send_op_set_name(uct_rc_iface_send_op_t *op, const char *name)
+{
+#if ENABLE_DEBUG_DATA
+    op->name = name;
+#endif
+}
+
 #endif

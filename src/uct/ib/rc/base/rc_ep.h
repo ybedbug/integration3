@@ -362,6 +362,7 @@ uct_rc_txqp_add_flush_comp(uct_rc_iface_t *iface, uct_base_ep_t *ep,
 
         op->flags     = 0;
         op->user_comp = comp;
+        uct_rc_iface_send_op_set_name(op, "rc_txqp_add_flush_comp");
         uct_rc_txqp_add_send_op_sn(txqp, op, sn);
         VALGRIND_MAKE_MEM_DEFINED(op, sizeof(*op)); /* handler set by mpool init */
     }
