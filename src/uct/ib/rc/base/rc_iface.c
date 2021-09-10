@@ -159,12 +159,17 @@ uct_rc_iface_flush_comp_init(ucs_mpool_t *mp, void *obj, void *chunk)
     op->iface   = iface;
 }
 
+
+static void ucp_send_op_mpool_obj_str(ucs_mpool_t *mp, void *obj,
+                                      ucs_string_buffer_t *strb);
+
+
 static ucs_mpool_ops_t uct_rc_flush_comp_mpool_ops = {
     .chunk_alloc   = ucs_mpool_chunk_malloc,
     .chunk_release = ucs_mpool_chunk_free,
     .obj_init      = uct_rc_iface_flush_comp_init,
     .obj_cleanup   = NULL,
-    .obj_str       = NULL
+    .obj_str       = ucp_send_op_mpool_obj_str
 };
 
 ucs_status_t uct_rc_iface_query(uct_rc_iface_t *iface,
@@ -953,3 +958,24 @@ ucs_status_t uct_rc_iface_fence(uct_iface_h tl_iface, unsigned flags)
     UCT_TL_IFACE_STAT_FENCE(&iface->super.super);
     return UCS_OK;
 }
+
+static void ucp_send_op_mpool_obj_str(ucs_mpool_t *mp, void *obj,
+                                      ucs_string_buffer_t *strb)
+{
+    uct_rc_iface_send_op_t *op    = obj;
+    const char *handler_func_name = ucs_debug_get_symbol_name(op->handler);
+    const char *comp_func_name;
+
+    ucs_string_buffer_appendf(strb, "flags:0x%x handler:%s()", op->flags,
+                              handler_func_name);
+
+    if (op->user_comp != NULL) {
+        comp_func_name = ucs_debug_get_symbol_name(op->user_comp->func);
+        ucs_string_buffer_appendf(strb, " comp:%s()", comp_func_name);
+    }
+
+#if ENABLE_DEBUG_DATA
+    ucs_string_buffer_appendf(strb, " name:%s", op->name);
+#endif
+}
+
