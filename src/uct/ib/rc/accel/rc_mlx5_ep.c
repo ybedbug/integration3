@@ -589,7 +589,7 @@ ucs_status_t uct_rc_mlx5_ep_fc_ctrl(uct_ep_t *tl_ep, unsigned op,
                                  NULL, 0,
                                  UCT_RC_EP_FC_PURE_GRANT, 0, 0,
                                  0, 0,
-                                 NULL, NULL, 0, 0,
+                                 NULL, NULL, 0, MLX5_WQE_CTRL_CQ_UPDATE,
                                  INT_MAX);
     return UCS_OK;
 }
