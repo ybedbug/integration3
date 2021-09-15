@@ -640,7 +640,8 @@ public:
     public:
         IoWriteResponseCallback(size_t buffer_size,
             MemoryPool<IoWriteResponseCallback>& pool) :
-            _server(NULL), _conn(NULL), _sn(0), _iov(NULL), _pool(pool) {
+            _status(UCS_OK), _server(NULL), _conn(NULL), _op_cnt(NULL),
+            _chunk_cnt(0), _sn(0), _iov(NULL), _pool(pool) {
         }
 
         void init(DemoServer *server, UcxConnection* conn, uint32_t sn,
@@ -651,20 +652,24 @@ public:
             _sn        = sn;
             _iov       = iov;
             _chunk_cnt = iov->size();
+            _status    = UCS_OK;
         }
 
         virtual void operator()(ucs_status_t status) {
+            if (_status == UCS_OK) {
+                _status = status;
+            }
             if (--_chunk_cnt > 0) {
                 return;
             }
 
-            if (status == UCS_OK) {
-                if (_conn->ucx_status() == UCS_OK) {
-                    _server->send_io_write_response(_conn, *_iov, _sn);
-                }
-
+            if (_status == UCS_OK) {
                 if (_server->opts().validate) {
                     validate(*_iov, _sn);
+                }
+
+                if (_conn->ucx_status() == UCS_OK) {
+                    _server->send_io_write_response(_conn, *_iov, _sn);
                 }
             }
 
@@ -676,6 +681,7 @@ public:
         }
 
     private:
+        ucs_status_t                         _status;
         DemoServer*                          _server;
         UcxConnection*                       _conn;
         long*                                _op_cnt;
@@ -1019,9 +1025,9 @@ public:
     public:
         IoReadResponseCallback(size_t buffer_size,
             MemoryPool<IoReadResponseCallback>& pool) :
-            _comp_counter(0), _client(NULL),
+            _status(UCS_OK), _comp_counter(0), _client(NULL),
             _server_index(std::numeric_limits<size_t>::max()),
-            _sn(0), _iov(NULL),
+            _sn(0), _validate(false), _iov(NULL),
             _buffer(UcxContext::malloc(buffer_size, pool.name().c_str())),
             _buffer_size(buffer_size), _pool(pool) {
 
@@ -1039,6 +1045,7 @@ public:
             _sn           = sn;
             _validate     = validate;
             _iov          = iov;
+            _status       = UCS_OK;
         }
 
         ~IoReadResponseCallback() {
@@ -1046,6 +1053,9 @@ public:
         }
 
         virtual void operator()(ucs_status_t status) {
+            if (_status == UCS_OK) {
+                _status = status;
+            }
             if (--_comp_counter > 0) {
                 return;
             }
@@ -1053,8 +1063,7 @@ public:
             assert(_server_index != std::numeric_limits<size_t>::max());
             _client->handle_operation_completion(_server_index, IO_READ,
                                                  _iov->data_size());
-
-            if (_validate && (status == UCS_OK)) {
+            if ((_status == UCS_OK) && _validate) {
                 iomsg_t *msg = reinterpret_cast<iomsg_t*>(_buffer);
                 validate(msg, _sn, _buffer_size);
                 validate(*_iov, _sn);
@@ -1069,6 +1078,7 @@ public:
         }
 
     private:
+        ucs_status_t                        _status;
         long                                _comp_counter;
         DemoClient*                         _client;
         size_t                              _server_index;
@@ -1110,7 +1120,7 @@ public:
         server_info_t& server_info = _server_info[server_index];
 
         ASSERTV(get_num_uncompleted(server_info) < opts().conn_window_size)
-                << "num_ucompleted=" << get_num_uncompleted(server_info)
+                << "num_uncompleted=" << get_num_uncompleted(server_info)
                 << " conn_window_size=" << opts().conn_window_size;
 
         ++server_info.num_sent[op];
