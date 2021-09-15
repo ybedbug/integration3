@@ -500,6 +500,8 @@ ucs_status_t ucp_worker_set_ep_failed(ucp_worker_h worker, ucp_ep_h ucp_ep,
     ucp_worker_err_handle_arg_t *err_handle_arg;
     ucs_log_level_t             log_level;
 
+    ucs_assert(UCS_STATUS_IS_ERR(status));
+
     if (ucp_ep->flags & UCP_EP_FLAG_FAILED) {
         goto out_ok;
     }
