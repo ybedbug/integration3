@@ -106,8 +106,8 @@ typedef struct ucp_context_config {
 
 struct ucp_config {
     /** Array of device lists names to use.
-     *  This array holds three lists - network devices, shared memory devices
-     *  and acceleration devices */
+     *  This array holds four lists - network devices, shared memory devices,
+     *  acceleration devices and loop-back devices */
     ucs_config_names_array_t               devices[UCT_DEVICE_TYPE_LAST];
     /** Array of transport names to use */
     ucs_config_names_array_t               tls;
@@ -123,6 +123,8 @@ struct ucp_config {
     char                                   *env_prefix;
     /** Configuration saved directly in the context */
     ucp_context_config_t                   ctx;
+    /** Save ucx configurations not listed in ucp_config_table **/
+    ucs_list_link_t                        cached_key_list;
 };
 
 
@@ -172,7 +174,6 @@ typedef struct ucp_tl_md {
  * UCP context
  */
 typedef struct ucp_context {
-
     ucp_tl_cmpt_t                 *tl_cmpts;  /* UCT components */
     ucp_rsc_index_t               num_cmpts;  /* Number of UCT components */
 
@@ -247,6 +248,8 @@ typedef struct ucp_context {
     /* All configurations about multithreading support */
     ucp_mt_lock_t                 mt_lock;
 
+    /* Save cached uct configurations */
+    ucs_list_link_t               cached_key_list;
 } ucp_context_t;
 
 
@@ -465,5 +468,11 @@ uint64_t ucp_context_dev_tl_bitmap(ucp_context_h context, const char *dev_name);
 
 uint64_t ucp_context_dev_idx_tl_bitmap(ucp_context_h context,
                                        ucp_rsc_index_t dev_idx);
+
+ucs_status_t
+ucp_config_modify_internal(ucp_config_t *config, const char *name,
+                           const char *value);
+
+void ucp_apply_uct_config_list(ucp_context_h context, void *config);
 
 #endif
