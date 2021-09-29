@@ -136,9 +136,9 @@ ucs_status_t uct_rdmacm_cm_ep_conn_notify(uct_ep_h ep)
               cep->id, rdmacm_cm, rdmacm_cm->ev_ch);
 
     if (rdma_establish(cep->id)) {
-        ucs_error("rdma_establish on ep %p (to server addr=%s) failed: %m",
-                  cep, ucs_sockaddr_str(remote_addr, ip_port_str,
-                                        UCS_SOCKADDR_STRING_LEN));
+        ucs_diag("rdma_establish on ep %p (to server addr=%s) failed: %m", cep,
+                 ucs_sockaddr_str(remote_addr, ip_port_str,
+                                  UCS_SOCKADDR_STRING_LEN));
         remote_data.field_mask = 0;
         uct_rdmacm_cm_ep_set_failed(cep, &remote_data,
                                     UCS_ERR_CONNECTION_RESET);
@@ -346,10 +346,10 @@ static ucs_status_t uct_rdamcm_cm_ep_server_init(uct_rdmacm_cm_ep_t *cep,
               event->id);
 
     if (rdma_accept(event->id, &conn_param)) {
-        ucs_error("%s: rdma_accept(id=%p client_address=%s) failed: %m",
-                  uct_rdmacm_cm_ep_str(cep, ep_str, UCT_RDMACM_EP_STRING_LEN),
-                  event->id, ucs_sockaddr_str(rdma_get_peer_addr(event->id),
-                                              ip_port_str, UCS_SOCKADDR_STRING_LEN));
+        ucs_diag("%s: rdma_accept(id=%p client_address=%s) failed: %m",
+                 uct_rdmacm_cm_ep_str(cep, ep_str, UCT_RDMACM_EP_STRING_LEN),
+                 event->id, ucs_sockaddr_str(rdma_get_peer_addr(event->id),
+                                             ip_port_str, UCS_SOCKADDR_STRING_LEN));
         uct_rdmacm_cm_ep_destroy_dummy_qp(cep);
         status = UCS_ERR_CONNECTION_RESET;
         goto err;

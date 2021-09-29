@@ -137,10 +137,10 @@ static void uct_rdmacm_cm_handle_event_addr_resolved(struct rdma_cm_event *event
               event->id);
 
     if (rdma_resolve_route(event->id, uct_rdmacm_cm_get_timeout(cm))) {
-        ucs_error("%s: rdma_resolve_route(to addr=%s) failed: %m",
-                  uct_rdmacm_cm_ep_str(cep, ep_str, UCT_RDMACM_EP_STRING_LEN),
-                  ucs_sockaddr_str(remote_addr, ip_port_str,
-                                   UCS_SOCKADDR_STRING_LEN));
+        ucs_diag("%s: rdma_resolve_route(to addr=%s) failed: %m",
+                 uct_rdmacm_cm_ep_str(cep, ep_str, UCT_RDMACM_EP_STRING_LEN),
+                 ucs_sockaddr_str(remote_addr, ip_port_str,
+                                  UCS_SOCKADDR_STRING_LEN));
         remote_data.field_mask = 0;
         uct_rdmacm_cm_ep_set_failed(cep, &remote_data, UCS_ERR_IO_ERROR);
     }
@@ -176,10 +176,10 @@ static void uct_rdmacm_cm_handle_event_route_resolved(struct rdma_cm_event *even
                                UCS_SOCKADDR_STRING_LEN));
 
     if (rdma_connect(cep->id, &conn_param)) {
-        ucs_error("%s: rdma_connect(to addr=%s) failed: %m",
-                  uct_rdmacm_cm_ep_str(cep, ep_str, UCT_RDMACM_EP_STRING_LEN),
-                  ucs_sockaddr_str(remote_addr, remote_ip_port_str,
-                                   UCS_SOCKADDR_STRING_LEN));
+        ucs_diag("%s: rdma_connect(to addr=%s) failed: %m",
+                 uct_rdmacm_cm_ep_str(cep, ep_str, UCT_RDMACM_EP_STRING_LEN),
+                 ucs_sockaddr_str(remote_addr, remote_ip_port_str,
+                                  UCS_SOCKADDR_STRING_LEN));
         remote_data.field_mask = 0;
         uct_rdmacm_cm_ep_set_failed(cep, &remote_data, UCS_ERR_IO_ERROR);
     }
