@@ -203,17 +203,17 @@ public:
         return rand(_seed, unsigned_type(0), max - 1);
     }
 
-    static inline void fill(unsigned &seed, void *buffer, size_t size) {
+    static inline void fill(unsigned seed, void *buffer, size_t size) {
         size_t body_count = size / sizeof(uint64_t);
         size_t tail_count = size & (sizeof(uint64_t) - 1);
         uint64_t *body    = reinterpret_cast<uint64_t*>(buffer);
         uint8_t *tail     = reinterpret_cast<uint8_t*>(body + body_count);
 
         fill(seed, body, body_count);
-        fill(seed, tail, tail_count);
+        fill(tail, tail_count);
     }
 
-    static inline size_t validate(unsigned &seed, const void *buffer,
+    static inline size_t validate(unsigned seed, const void *buffer,
                                   size_t size, std::stringstream &err_str) {
         size_t body_count    = size / sizeof(uint64_t);
         size_t tail_count    = size & (sizeof(uint64_t) - 1);
@@ -225,7 +225,7 @@ public:
             return err_pos * sizeof(body[0]);
         }
 
-        err_pos = validate(seed, tail, tail_count, err_str);
+        err_pos = validate(tail, tail_count, err_str);
         if (err_pos < tail_count) {
             return (body_count * sizeof(body[0])) + (err_pos * sizeof(tail[0]));
         }
@@ -234,25 +234,55 @@ public:
     }
 
 private:
-    template <typename T>
-    static inline void fill(unsigned &seed, T *buffer, size_t count) {
+    typedef struct {
+        uint32_t segment;
+        uint32_t seed;
+    } UCS_S_PACKED fill_data_t;
+
+    template<typename T>
+    static inline void fill(T *buffer, size_t count)
+    {
         for (size_t i = 0; i < count; ++i) {
-            buffer[i] = rand<T>(seed);
+            buffer[i] = i;
         }
     }
 
-    template <typename T>
-    static inline size_t validate(unsigned &seed, const T *buffer,
-                                  size_t count, std::stringstream &err_str) {
+    static inline void fill(unsigned seed, uint64_t *buffer, size_t count)
+    {
         for (size_t i = 0; i < count; ++i) {
-            T expected_val = rand<T>(seed);
-            if (buffer[i] != expected_val) {
-                err_str << std::hex << "expected: " << expected_val << " got: "
-                        << buffer[i] << std::dec;
+            fill_data_t *fill_data = (fill_data_t*)&buffer[i];
+
+            fill_data->segment = i;
+            fill_data->seed    = seed;
+        }
+    }
+
+    template<typename T>
+    static inline size_t validate(const T *buffer, size_t count,
+                                  std::stringstream &err_str)
+    {
+        for (size_t i = 0; i < count; ++i) {
+            if (buffer[i] != i) {
                 return i;
             }
         }
 
+        return count;
+    }
+
+    static inline size_t validate(unsigned seed, const uint64_t *buffer,
+                                  size_t count, std::stringstream &err_str)
+    {
+        for (size_t i = 0; i < count; ++i) {
+            const fill_data_t *fill_data = (const fill_data_t*)&buffer[i];
+
+            if ((i != fill_data->segment) || (seed != fill_data->seed)) {
+                err_str << std::hex << "expected: segment=" << i << " seed="
+                        << seed << " got: segment=" << fill_data->segment
+                        << " seed=" << fill_data->seed << std::dec;
+                return i;
+            }
+        }
         return count;
     }
 
