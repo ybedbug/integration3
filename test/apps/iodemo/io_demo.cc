@@ -79,6 +79,7 @@ typedef struct {
     bool                     validate;
     bool                     debug_timeout;
     size_t                   rndv_thresh;
+    unsigned                 progress_count;
 } options_t;
 
 #define LOG_PREFIX  "[DEMO]"
@@ -859,7 +860,7 @@ public:
         while (_status == OK) {
             try {
                 for (size_t i = 0; i < BUSY_PROGRESS_COUNT; ++i) {
-                    progress();
+                    progress(_test_opts.progress_count);
                 }
 
                 double curr_time = get_time();
@@ -1455,7 +1456,7 @@ public:
         while (((_num_sent - _num_completed) > max_outstanding) &&
                (_status == OK)) {
             if ((count++ < BUSY_PROGRESS_COUNT) || timer_finished) {
-                progress();
+                progress(_test_opts.progress_count);
                 continue;
             }
 
@@ -1683,7 +1684,7 @@ public:
             long max_outstanding   = std::min(opts().window_size,
                                               conns_window_size) - 1;
 
-            progress();
+            progress(_test_opts.progress_count);
             wait_for_responses(max_outstanding);
             if (_status != OK) {
                 break;
@@ -2066,9 +2067,10 @@ static int parse_args(int argc, char **argv, options_t *test_opts)
     test_opts->validate              = false;
     test_opts->debug_timeout         = false;
     test_opts->rndv_thresh           = UcxContext::rndv_thresh_auto;
+    test_opts->progress_count        = 1;
 
     while ((c = getopt(argc, argv,
-                       "p:c:r:d:b:i:w:a:k:o:t:n:l:s:y:vqDHP:L:R:")) != -1) {
+                       "p:c:r:d:b:i:w:a:k:o:t:n:l:s:y:vqDHP:L:R:C:")) != -1) {
         switch (c) {
         case 'p':
             test_opts->port_num = atoi(optarg);
@@ -2084,6 +2086,9 @@ static int parse_args(int argc, char **argv, options_t *test_opts)
                           << "' value for retry interval" << std::endl;
                 return -1;
             }
+            break;
+        case 'C':
+            test_opts->progress_count = strtol(optarg, NULL, 0);
             break;
         case 'r':
             test_opts->iomsg_size = strtol(optarg, NULL, 0);
@@ -2230,6 +2235,7 @@ static int parse_args(int argc, char **argv, options_t *test_opts)
             std::cout << "  -P <interval>              Set report printing interval"  << std::endl;
             std::cout << "  -R <rndv-thresh>           Rendezvous threshold used to force eager or rendezvous protocol";
             std::cout << "" << std::endl;
+            std::cout << "  -C <progress_count>        Maximal number of consecutive ucp_worker_progress invocations" << std::endl;
             return -1;
         }
     }

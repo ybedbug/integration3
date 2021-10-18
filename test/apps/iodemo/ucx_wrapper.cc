@@ -211,10 +211,14 @@ bool UcxContext::listen(const struct sockaddr* saddr, size_t addrlen)
     return true;
 }
 
-void UcxContext::progress()
+void UcxContext::progress(unsigned count)
 {
-    ucp_worker_progress(_worker);
-    progress_io_message();
+    int i = 0;
+
+    while ((i++ < count) && (ucp_worker_progress(_worker) > 0)) {
+        progress_io_message();
+    }
+
     progress_timed_out_conns();
     progress_conn_requests();
     progress_failed_connections();
