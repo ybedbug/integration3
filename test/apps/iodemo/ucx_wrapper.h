@@ -120,7 +120,7 @@ public:
 
     bool listen(const struct sockaddr* saddr, size_t addrlen);
 
-    void progress();
+    void progress(unsigned count = 1);
 
     void memory_pin_stats(memory_pin_stats_t *stats);
 
