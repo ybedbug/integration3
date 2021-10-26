@@ -204,24 +204,29 @@ public:
         return rand(_seed, unsigned_type(0), max - 1);
     }
 
-    static inline void fill(unsigned seed, void *buffer, size_t size) {
+    static inline void fill(unsigned seed, uint64_t conn_id, void *buffer,
+                            size_t size)
+    {
         size_t body_count = size / sizeof(uint64_t);
         size_t tail_count = size & (sizeof(uint64_t) - 1);
         uint64_t *body    = reinterpret_cast<uint64_t*>(buffer);
         uint8_t *tail     = reinterpret_cast<uint8_t*>(body + body_count);
 
-        fill(seed, body, body_count);
+        fill(seed, uint16_t(conn_id), body, body_count);
         fill(tail, tail_count);
     }
 
-    static inline size_t validate(unsigned seed, const void *buffer,
-                                  size_t size, std::stringstream &err_str) {
+    static inline size_t validate(unsigned seed, uint64_t conn_id,
+                                  const void *buffer, size_t size,
+                                  std::stringstream &err_str)
+    {
         size_t body_count    = size / sizeof(uint64_t);
         size_t tail_count    = size & (sizeof(uint64_t) - 1);
         const uint64_t *body = reinterpret_cast<const uint64_t*>(buffer);
         const uint8_t *tail  = reinterpret_cast<const uint8_t*>(body + body_count);
 
-        size_t err_pos = validate(seed, body, body_count, err_str);
+        size_t err_pos = validate(seed, uint16_t(conn_id), body, body_count,
+                                  err_str);
         if (err_pos < body_count) {
             return err_pos * sizeof(body[0]);
         }
@@ -236,7 +241,8 @@ public:
 
 private:
     typedef struct {
-        uint32_t segment;
+        uint16_t segment;
+        uint16_t conn_id;
         uint32_t seed;
     } UCS_S_PACKED fill_data_t;
 
@@ -248,12 +254,14 @@ private:
         }
     }
 
-    static inline void fill(unsigned seed, uint64_t *buffer, size_t count)
+    static inline void fill(unsigned seed, uint16_t conn_id, uint64_t *buffer,
+                            size_t count)
     {
         for (size_t i = 0; i < count; ++i) {
             fill_data_t *fill_data = (fill_data_t*)&buffer[i];
 
             fill_data->segment = i;
+            fill_data->conn_id = conn_id;
             fill_data->seed    = seed;
         }
     }
@@ -271,16 +279,21 @@ private:
         return count;
     }
 
-    static inline size_t validate(unsigned seed, const uint64_t *buffer,
-                                  size_t count, std::stringstream &err_str)
+    static inline size_t validate(unsigned seed, uint16_t conn_id,
+                                  const uint64_t *buffer, size_t count,
+                                  std::stringstream &err_str)
     {
         for (size_t i = 0; i < count; ++i) {
             const fill_data_t *fill_data = (const fill_data_t*)&buffer[i];
+            uint16_t segment(i);
 
-            if ((i != fill_data->segment) || (seed != fill_data->seed)) {
-                err_str << std::hex << "expected: segment=" << i << " seed="
-                        << seed << " got: segment=" << fill_data->segment
-                        << " seed=" << fill_data->seed << std::dec;
+            if ((segment != fill_data->segment) ||
+                (conn_id != fill_data->conn_id) || (seed != fill_data->seed)) {
+                err_str << std::hex << fill_data << ": expected: segment=" << i
+                        << " conn_id=" << conn_id << " seed=" << seed
+                        << " got: segment=" << fill_data->segment
+                        << " conn_id=" << fill_data->conn_id << " seed="
+                        << fill_data->seed << std::dec;
                 return i;
             }
         }
@@ -301,10 +314,11 @@ class P2pDemoCommon : public UcxContext {
 public:
     /* IO header */
     typedef struct {
-        uint32_t    sn;
-        uint8_t     op;
-        uint64_t    data_size;
-    } iomsg_t;
+        uint64_t conn_id;
+        uint64_t data_size;
+        uint32_t sn;
+        uint8_t  op;
+    } UCS_S_PACKED iomsg_t;
 
     typedef enum {
         OK,
@@ -376,7 +390,8 @@ protected:
         }
 
         void init(size_t data_size, MemoryPool<Buffer, true> &chunk_pool,
-                  uint32_t sn, bool validate) {
+                  uint32_t sn, uint64_t conn_id, bool validate)
+        {
             assert(_iov.empty());
 
             _data_size    = data_size;
@@ -391,7 +406,7 @@ protected:
             assert(remaining == 0);
 
             if (validate) {
-                fill_data(sn);
+                fill_data(sn, conn_id);
             }
         }
 
@@ -408,15 +423,14 @@ protected:
             _pool.put(this);
         }
 
-        inline size_t
-        validate(unsigned seed, std::stringstream &err_str) const {
+        inline size_t validate(unsigned seed, uint64_t conn_id,
+                               std::stringstream &err_str) const {
             assert(!_iov.empty());
 
             for (size_t iov_err_pos = 0, i = 0; i < _iov.size(); ++i) {
-                size_t buf_err_pos = IoDemoRandom::validate(seed,
-                                                            _iov[i]->buffer(),
-                                                            _iov[i]->size(),
-                                                            err_str);
+                size_t buf_err_pos = IoDemoRandom::validate(
+                        seed, uint16_t(conn_id), _iov[i]->buffer(),
+                        _iov[i]->size(), err_str);
                 iov_err_pos       += buf_err_pos;
                 if (buf_err_pos < _iov[i]->size()) {
                     return iov_err_pos;
@@ -437,9 +451,11 @@ protected:
             return remaining - _iov[i]->size();
         }
 
-        void fill_data(unsigned seed) {
+        void fill_data(unsigned seed, uint64_t conn_id)
+        {
             for (size_t i = 0; i < _iov.size(); ++i) {
-                IoDemoRandom::fill(seed, _iov[i]->buffer(), _iov[i]->size());
+                IoDemoRandom::fill(seed, uint16_t(conn_id),
+                                   _iov[i]->buffer(), _iov[i]->size());
             }
         }
 
@@ -464,16 +480,19 @@ protected:
             }
         }
 
-        void init(io_op_t op, uint32_t sn, size_t data_size, bool validate) {
+        void init(io_op_t op, uint32_t sn, uint64_t conn_id, size_t data_size,
+                  bool validate)
+        {
             iomsg_t *m = reinterpret_cast<iomsg_t *>(_buffer);
 
             m->sn        = sn;
+            m->conn_id   = conn_id;
             m->op        = op;
             m->data_size = data_size;
             if (validate) {
                 void *tail       = reinterpret_cast<void*>(m + 1);
                 size_t tail_size = _io_msg_size - sizeof(*m);
-                IoDemoRandom::fill(sn, tail, tail_size);
+                IoDemoRandom::fill(sn, uint16_t(conn_id), tail, tail_size);
             }
         }
 
@@ -577,7 +596,7 @@ protected:
     bool send_io_message(UcxConnection *conn, io_op_t op, uint32_t sn,
                          size_t data_size, bool validate) {
         IoMessage *m = _io_msg_pool.get();
-        m->init(op, sn, data_size, validate);
+        m->init(op, sn, conn->id(), data_size, validate);
         return send_io_message(conn, m);
     }
 
@@ -626,12 +645,12 @@ protected:
     }
 
     static void validate(const UcxConnection *conn, const BufferIov& iov,
-                         unsigned seed, io_op_t op) {
+                         unsigned seed, uint64_t conn_id, io_op_t op) {
         std::stringstream err_str;
 
         assert(iov.size() != 0);
 
-        size_t err_pos = iov.validate(seed, err_str);
+        size_t err_pos = iov.validate(seed, conn_id, err_str);
         if (err_pos != iov.npos()) {
             std::stringstream err_log_str;
             err_log_str << "iov data corruption (" << err_str.str() << ") at "
@@ -647,7 +666,8 @@ protected:
         size_t buf_size = iomsg_size - sizeof(*msg);
         std::stringstream err_str;
 
-        size_t err_pos = IoDemoRandom::validate(seed, buf, buf_size, err_str);
+        size_t err_pos = IoDemoRandom::validate(seed, msg->conn_id, buf,
+                                                buf_size, err_str);
         if (err_pos < buf_size) {
             std::stringstream err_log_str;
             err_log_str << "io msg data corruption (" << err_str.str()
@@ -704,15 +724,16 @@ public:
         IoWriteResponseCallback(size_t buffer_size,
             MemoryPool<IoWriteResponseCallback>& pool) :
             _status(UCS_OK), _server(NULL), _conn(NULL), _op_cnt(NULL),
-            _chunk_cnt(0), _sn(0), _iov(NULL), _pool(pool) {
+            _chunk_cnt(0), _sn(0), _conn_id(0), _iov(NULL), _pool(pool) {
         }
 
         void init(DemoServer *server, UcxConnection* conn, uint32_t sn,
-                  BufferIov *iov, long* op_cnt) {
+                  uint64_t conn_id, BufferIov *iov, long* op_cnt) {
             _server    = server;
             _conn      = conn;
             _op_cnt    = op_cnt;
             _sn        = sn;
+            _conn_id   = conn_id;
             _iov       = iov;
             _chunk_cnt = iov->size();
             _status    = UCS_OK;
@@ -728,7 +749,7 @@ public:
 
             if (_status == UCS_OK) {
                 if (_server->opts().validate) {
-                    validate(_conn, *_iov, _sn, IO_WRITE);
+                    validate(_conn, *_iov, _sn, _conn_id, IO_WRITE);
                 }
 
                 if (_conn->ucx_status() == UCS_OK) {
@@ -750,6 +771,7 @@ public:
         long*                                _op_cnt;
         uint32_t                             _chunk_cnt;
         uint32_t                             _sn;
+        uint64_t                             _conn_id;
         BufferIov*                           _iov;
         MemoryPool<IoWriteResponseCallback>& _pool;
     };
@@ -885,7 +907,9 @@ public:
         SendCompleteCallback *cb  = _send_callback_pool.get();
         ConnectionStat &conn_stat = _conn_stat_map.find(conn)->second;
 
-        iov->init(msg->data_size, _data_chunks_pool, msg->sn, opts().validate);
+        // Send read response data with client's connection id
+        iov->init(msg->data_size, _data_chunks_pool, msg->sn, msg->conn_id,
+                  opts().validate);
         cb->init(iov, &conn_stat.completions<IO_READ>());
 
         conn_stat.bytes<IO_READ>() += msg->data_size;
@@ -904,8 +928,10 @@ public:
         IoWriteResponseCallback *w = _callback_pool.get();
         ConnectionStat &conn_stat  = _conn_stat_map.find(conn)->second;
 
-        iov->init(msg->data_size, _data_chunks_pool, msg->sn, opts().validate);
-        w->init(this, conn, msg->sn, iov, &conn_stat.completions<IO_WRITE>());
+        iov->init(msg->data_size, _data_chunks_pool, 0, 0, opts().validate);
+        // Expect the write data to have sender's connection id
+        w->init(this, conn, msg->sn, msg->conn_id, iov,
+                &conn_stat.completions<IO_WRITE>());
 
         conn_stat.bytes<IO_WRITE>() += msg->data_size;
         recv_data(conn, *iov, msg->sn, w);
@@ -1090,7 +1116,7 @@ public:
             MemoryPool<IoReadResponseCallback>& pool) :
             _status(UCS_OK), _comp_counter(0), _client(NULL),
             _server_index(std::numeric_limits<size_t>::max()),
-            _sn(0), _validate(false), _iov(NULL),
+            _sn(0), _conn_id(0), _validate(false), _iov(NULL),
             _buffer(UcxContext::malloc(buffer_size, pool.name().c_str())),
             _buffer_size(buffer_size), _pool(pool) {
 
@@ -1099,13 +1125,14 @@ public:
             }
         }
 
-        void init(DemoClient *client, size_t server_index,
-                  uint32_t sn, bool validate, BufferIov *iov) {
+        void init(DemoClient *client, size_t server_index, uint32_t sn,
+                  uint64_t conn_id, bool validate, BufferIov *iov) {
             /* wait for all data chunks and the read response completion */
             _comp_counter = iov->size() + 1;
             _client       = client;
             _server_index = server_index;
             _sn           = sn;
+            _conn_id      = conn_id;
             _validate     = validate;
             _iov          = iov;
             _status       = UCS_OK;
@@ -1132,7 +1159,7 @@ public:
                 iomsg_t *msg                     =
                         reinterpret_cast<iomsg_t*>(_buffer);
                 validate(server_info.conn, msg, _sn, _buffer_size);
-                validate(server_info.conn, *_iov, _sn, IO_READ);
+                validate(server_info.conn, *_iov, _sn, _conn_id, IO_READ);
             }
 
             _iov->release();
@@ -1149,6 +1176,7 @@ public:
         DemoClient*                         _client;
         size_t                              _server_index;
         uint32_t                            _sn;
+        uint64_t                            _conn_id;
         bool                                _validate;
         BufferIov*                          _iov;
         void*                               _buffer;
@@ -1257,8 +1285,8 @@ public:
 
         commit_operation(server_index, IO_READ, data_size);
 
-        iov->init(data_size, _data_chunks_pool, sn, validate);
-        r->init(this, server_index, sn, validate, iov);
+        iov->init(data_size, _data_chunks_pool, 0, 0, validate);
+        r->init(this, server_index, sn, server_info.conn->id(), validate, iov);
 
         recv_data(server_info.conn, *iov, sn, r);
         server_info.conn->recv_data(r->buffer(), opts().iomsg_size, sn, r);
@@ -1281,7 +1309,8 @@ public:
 
         commit_operation(server_index, IO_WRITE, data_size);
 
-        iov->init(data_size, _data_chunks_pool, sn, validate);
+        iov->init(data_size, _data_chunks_pool, sn, server_info.conn->id(),
+                  validate);
         cb->init(iov, NULL);
 
         VERBOSE_LOG << "sending data " << iov << " size "
