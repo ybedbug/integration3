@@ -377,15 +377,20 @@ protected:
     class BufferIov {
     public:
         BufferIov(size_t size, MemoryPool<BufferIov>& pool) :
-                _data_size(0), _pool(pool) {
+                _data_size(0), _validate(false), _pool(pool)
+        {
             _iov.reserve(size);
         }
 
-        size_t size() const {
+        size_t size() const
+        {
+            assert(!_iov.empty());
             return _iov.size();
         }
 
-        size_t data_size() const {
+        size_t data_size() const
+        {
+            assert(!_iov.empty());
             return _data_size;
         }
 
@@ -394,6 +399,7 @@ protected:
         {
             assert(_iov.empty());
 
+            _validate     = validate;
             _data_size    = data_size;
             Buffer *chunk = chunk_pool.get();
             _iov.resize(get_chunk_cnt(data_size, chunk->_capacity));
@@ -415,17 +421,26 @@ protected:
         }
 
         void release() {
+            assert(!_iov.empty());
+
+            if (_validate) {
+                fill_data(std::numeric_limits<unsigned>::max(),
+                          std::numeric_limits<uint64_t>::max());
+            }
+
             while (!_iov.empty()) {
                 _iov.back()->release();
                 _iov.pop_back();
             }
 
+            _validate = false;
             _pool.put(this);
         }
 
         inline size_t validate(unsigned seed, uint64_t conn_id,
                                std::stringstream &err_str) const {
             assert(!_iov.empty());
+            assert(_validate);
 
             for (size_t iov_err_pos = 0, i = 0; i < _iov.size(); ++i) {
                 size_t buf_err_pos = IoDemoRandom::validate(
@@ -459,11 +474,9 @@ protected:
             }
         }
 
-    public:
         static const size_t    _npos = static_cast<size_t>(-1);
-
-    private:
         size_t                 _data_size;
+        bool                   _validate;
         std::vector<Buffer*>   _iov;
         MemoryPool<BufferIov>& _pool;
     };
@@ -603,7 +616,11 @@ protected:
     void send_recv_data(UcxConnection* conn, const BufferIov &iov, uint32_t sn,
                         xfer_type_t send_recv_data,
                         UcxCallback* callback = EmptyCallback::get()) {
-        for (size_t i = 0; i < iov.size(); ++i) {
+        // Store the size of the IO vector into an auxillary variable to avoid
+        // touching IO vector object after it was released in the callback
+        size_t iov_size = iov.size();
+
+        for (size_t i = 0; i < iov_size; ++i) {
             if (send_recv_data == XFER_TYPE_SEND) {
                 conn->send_data(iov[i].buffer(), iov[i].size(), sn, callback);
             } else {
