@@ -612,6 +612,12 @@ typedef struct ucp_ep_params {
      * in client-server connection establishment flow.
      */
     ucs_sock_addr_t         sockaddr;
+    /**
+     * Local address in the form of a sockaddr; this field should be set
+     * along with its corresponding bit in the field_mask - @ref
+     * UCP_EP_PARAM_FIELD_LOCAL_ADDR.
+     */
+    ucs_sock_addr_t         local_addr;
 
     /**
      * Connection request from client; this field should be set along with its

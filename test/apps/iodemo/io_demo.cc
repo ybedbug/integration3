@@ -80,6 +80,7 @@ typedef struct {
     bool                     debug_timeout;
     size_t                   rndv_thresh;
     unsigned                 progress_count;
+    struct sockaddr_storage  local_addr;
 } options_t;
 
 #define LOG_PREFIX  "[DEMO]"
@@ -1531,6 +1532,7 @@ public:
     void connect(size_t server_index)
     {
         const char *server = opts().servers[server_index];
+        struct sockaddr_in *src_addr = NULL;
         struct sockaddr_in connect_addr;
         std::string server_addr;
         int port_num;
@@ -1556,6 +1558,9 @@ public:
             LOG << "invalid address " << server_addr;
             abort();
         }
+        if (opts().local_addr.ss_family == AF_INET) {
+            src_addr = (struct sockaddr_in *)&opts().local_addr;
+        }
 
         if (!_connecting_servers.insert(server_index).second) {
             LOG << server_name(server_index) << " is already connecting";
@@ -1564,7 +1569,8 @@ public:
 
         UcxConnection *conn = new UcxConnection(*this);
         _server_info[server_index].conn = conn;
-        conn->connect((const struct sockaddr*)&connect_addr,
+        conn->connect((struct sockaddr*)src_addr, 
+                      (const struct sockaddr*)&connect_addr,
                       sizeof(connect_addr),
                       new ConnectCallback(*this, server_index));
     }
@@ -2116,7 +2122,7 @@ static int parse_args(int argc, char **argv, options_t *test_opts)
     test_opts->progress_count        = 1;
 
     while ((c = getopt(argc, argv,
-                       "p:c:r:d:b:i:w:a:k:o:t:n:l:s:y:vqDHP:L:R:C:")) != -1) {
+                       "p:c:r:d:b:i:w:a:k:o:t:n:l:s:y:vqDHP:L:R:C:I:")) != -1) {
         switch (c) {
         case 'p':
             test_opts->port_num = atoi(optarg);
@@ -2246,6 +2252,9 @@ static int parse_args(int argc, char **argv, options_t *test_opts)
         case 'R':
             test_opts->rndv_thresh = strtol(optarg, NULL, 0);
             break;
+        case 'I':
+            ucs_sock_ipstr_to_sockaddr(optarg, &test_opts->local_addr);
+            break;
         case 'h':
         default:
             std::cout << "Usage: io_demo [options] [server_address]" << std::endl;
@@ -2282,6 +2291,7 @@ static int parse_args(int argc, char **argv, options_t *test_opts)
             std::cout << "  -R <rndv-thresh>           Rendezvous threshold used to force eager or rendezvous protocol";
             std::cout << "" << std::endl;
             std::cout << "  -C <progress_count>        Maximal number of consecutive ucp_worker_progress invocations" << std::endl;
+            std::cout << "  -I <interface_address>     Set source interface to specified interface." << std::endl;
             return -1;
         }
     }
